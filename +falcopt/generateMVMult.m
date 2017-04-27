@@ -593,7 +593,7 @@ function [data, code, info] = generateMVMult(varargin)
                             if abs(options.scale.M(j)) == 1
                                 code = [code, sprintf([names.M{j} '[' num2str(elements.M.access.indices{j}(elements.M.access.rows{j} == i & elements.M.access.cols{j} == k)-1) ']*' names.v{j} '[' num2str(k-1) ']'])]; %#ok
                             else
-                                code = [code, sprintf([falcopt.num2str(abs(options.scale.M(j)), options.precision) '*' names.M{j} '[' num2str(elements.M.access.indices{j}(elements.M.access.rows{j} == i & elements.M.access.cols{j} == k)-1) ']*' names.v{j} '[' num2str(k-1) ']'])]; %#ok
+                                code = [code, sprintf([falcopt.internal.num2str(abs(options.scale.M(j)), options.precision) '*' names.M{j} '[' num2str(elements.M.access.indices{j}(elements.M.access.rows{j} == i & elements.M.access.cols{j} == k)-1) ']*' names.v{j} '[' num2str(k-1) ']'])]; %#ok
                                 info.flops.mul = info.flops.mul+1;
                             end
                             info.flops.mul = info.flops.mul+1;
@@ -636,7 +636,7 @@ function [data, code, info] = generateMVMult(varargin)
                     if abs(options.scale.M(j)) == 1
                         code = [code, sprintf([names.m{j} '[%i]'], elements.m.stored.mat{j}(i)-1)]; %#ok
                     else
-                        code = [code, sprintf([falcopt.num2str(abs(options.scale.m(j), 'precision', options.precision), options.types.data) '*' names.m{j} '[' num2str(elements.m.stored.mat{j}(i)-1) ']'])]; %#ok
+                        code = [code, sprintf([falcopt.internal.num2str(abs(options.scale.m(j), 'precision', options.precision), options.types.data) '*' names.m{j} '[' num2str(elements.m.stored.mat{j}(i)-1) ']'])]; %#ok
                         info.flops.mul = info.flops.mul+1;
                     end
                 end

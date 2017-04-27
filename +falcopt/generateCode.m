@@ -511,10 +511,10 @@ switch o.gradients
         o.Jac_u_static = i.in_G.static;
         o.Jac_u_struct = i.in_G.struct.structure.mat;                        % structure of jacobian_u
         
-        info.flops.once = falcopt.addFlops( info.flops.once, falcopt.multFlops(i.y.flops,o.N+1));  % flops model_mpc
-        info.flops.ls = falcopt.addFlops( info.flops.ls, falcopt.multFlops(i.y.flops,o.N+1));      % flops model_mpc
-        info.flops.it = falcopt.addFlops( info.flops.it, falcopt.multFlops(i.in_F.flops,o.N));     % flops jacobian_x
-        info.flops.it = falcopt.addFlops( info.flops.it, falcopt.multFlops(i.in_G.flops,o.N));     % flops jacobian_u
+        info.flops.once = falcopt.internal.addFlops( info.flops.once, falcopt.internal.multFlops(i.y.flops,o.N+1));  % flops model_mpc
+        info.flops.ls = falcopt.internal.addFlops( info.flops.ls, falcopt.internal.multFlops(i.y.flops,o.N+1));      % flops model_mpc
+        info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_F.flops,o.N));     % flops jacobian_x
+        info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_G.flops,o.N));     % flops jacobian_u
     case 'manual'
         
         % generate external function (matlab)
@@ -527,10 +527,10 @@ switch o.gradients
         o.Jac_u_static = i.in_G.static;
         o.Jac_u_struct = i.in_G.struct.structure.mat;                        % structure of jacobian_u
         
-        info.flops.once = falcopt.addFlops( info.flops.once, falcopt.multFlops(i.y.flops,o.N+1));  % flops model_mpc
-        info.flops.ls = falcopt.addFlops( info.flops.ls, falcopt.multFlops(i.y.flops,o.N+1));      % flops model_mpc
-        info.flops.it = falcopt.addFlops( info.flops.it, falcopt.multFlops(i.in_F.flops,o.N));     % flops jacobian_x
-        info.flops.it = falcopt.addFlops( info.flops.it, falcopt.multFlops(i.in_G.flops,o.N));     % flops jacobian_u
+        info.flops.once = falcopt.internal.addFlops( info.flops.once, falcopt.internal.multFlops(i.y.flops,o.N+1));  % flops model_mpc
+        info.flops.ls = falcopt.internal.addFlops( info.flops.ls, falcopt.internal.multFlops(i.y.flops,o.N+1));      % flops model_mpc
+        info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_F.flops,o.N));     % flops jacobian_x
+        info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_G.flops,o.N));     % flops jacobian_u
         
     case 'ccode'
         % all functions will be provided in external_functions.c file
@@ -619,9 +619,9 @@ switch o.gradients
         for jj=1:length(o.K_n)
             o.Jac_n_struct{jj} = i.in_Dn_n{jj}.struct.structure.mat;        % structure of Dn
             
-            info.flops.once = falcopt.addFlops( info.flops.once, falcopt.multFlops(i.in_n{jj}.flops,length(o.K_n{jj})));  % flops build_n
-            info.flops.ls = falcopt.addFlops( info.flops.ls, falcopt.multFlops(i.in_n{jj}.flops,length(o.K_n{jj})));      % flops build_n
-            info.flops.it = falcopt.addFlops( info.flops.it, falcopt.multFlops(i.in_Dn_n{jj}.flops,length(o.K_n{jj})));   % flops build_Dn
+            info.flops.once = falcopt.internal.addFlops( info.flops.once, falcopt.internal.multFlops(i.in_n{jj}.flops,length(o.K_n{jj})));  % flops build_n
+            info.flops.ls = falcopt.internal.addFlops( info.flops.ls, falcopt.internal.multFlops(i.in_n{jj}.flops,length(o.K_n{jj})));      % flops build_n
+            info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_Dn_n{jj}.flops,length(o.K_n{jj})));   % flops build_Dn
         end
         if ~o.forceGradient
             o.Jac_m_struct = i.Jac_m_struct;
@@ -714,7 +714,7 @@ else
     optCode = [optCode, sprintf(['\t' 'unsigned int reset_rho = 0;' '\n'])];
 end
 
-optCode = [optCode, sprintf(['\t' o.real ' J= 0.0, alpha = ' falcopt.num2str(alpha, o.precision) ', Jt = 0.0,' '\n'])];
+optCode = [optCode, sprintf(['\t' o.real ' J= 0.0, alpha = ' falcopt.internal.num2str(alpha, o.precision) ', Jt = 0.0,' '\n'])];
 if o.debug > 1
     optCode = [optCode, sprintf(['\t\t' 'xp[%d],' '\n'],o.N*o.nx)];
 else
@@ -758,8 +758,8 @@ end
 % this function generates det_J_and_dot_J and det_J
 code = [code, c];
 data = [data, d];
-info.flops.it = falcopt.addFlops(info.flops.it, in.flops.it);
-info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops.ls);
+info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops.it);
+info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops.ls);
 
 c_w_use = argument_w(o,false);
 c_tr_use = argument_def(o,false);
@@ -780,9 +780,9 @@ end
 %             data = [data, d, sprintf('\n')];
 %         end
 %         code = [code, c, sprintf('\n\n')];
-%         in.flops = falcopt.multFlops( in.flops, length(o.K_nc{jj}));
-%         info.flops.once = falcopt.addFlops( info.flops.once, in.flops); % in initialize_slack
-%         info.flops.ls = falcopt.addFlops( info.flops.ls, in.flops); % in build_gpsl
+%         in.flops = falcopt.internal.multFlops( in.flops, length(o.K_nc{jj}));
+%         info.flops.once = falcopt.internal.addFlops( info.flops.once, in.flops); % in initialize_slack
+%         info.flops.ls = falcopt.internal.addFlops( info.flops.ls, in.flops); % in build_gpsl
 %     end
 
 [c, d, in] = generate_slack_initialization(o);
@@ -790,7 +790,7 @@ end
 % this function initializes the slack variables
 code = [code, c];
 data = [data, d];
-info.flops.once = falcopt.addFlops(info.flops.once, in.flops);
+info.flops.once = falcopt.internal.addFlops(info.flops.once, in.flops);
 
 optCode = [optCode, sprintf(['\t' 'initialize_slack(u' c_psi_use c_contr_use ', sl, sl_sqr, gps' ');' '\n\n'])];
 
@@ -816,18 +816,18 @@ end
 
 code = [code, c];
 data = [data, d];
-info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
 
 [c, d, in] = generate_dot_product_Nnu(o);
 code = [code, c];
 data = [data, d];
-in.flops = falcopt.multFlops( in.flops, 2); % called twice
-info.flops.it = falcopt.addFlops( info.flops.it, in.flops);
+in.flops = falcopt.internal.multFlops( in.flops, 2); % called twice
+info.flops.it = falcopt.internal.addFlops( info.flops.it, in.flops);
 
 [c, d, in] = generate_gradient_step(o);
 code = [code, c];
 data = [data, d];
-info.flops.it = falcopt.addFlops(info.flops.it, in.flops);
+info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 
 optCode = [optCode, sprintf(['\t\t' 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
     
@@ -844,8 +844,8 @@ data = [data, d];
 if o.merit_function == 0
     optCode = [optCode, sprintf(['\t\t' 'dot_product_Nnc(&gps_sqr, gps, gps);' '\n',...
         '\t\t' 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
-    in.flops = falcopt.multFlops( in.flops, 3);
-    info.flops.it = falcopt.addFlops( info.flops.it, in.flops);
+    in.flops = falcopt.internal.multFlops( in.flops, 3);
+    info.flops.it = falcopt.internal.addFlops( info.flops.it, in.flops);
 end
 
 if o.merit_function == 0
@@ -858,24 +858,24 @@ if o.merit_function == 0
     code = [code, c];
     data = [data, d];
     optCode = [optCode, sprintf(['\t\t' 'diff_Nnc(dm,muG,mu);' '\n\n'])];
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
     
     [c, d, in] = generate_det_phi(o);
     code = [code, c];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops); % inside condition
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops); % inside condition
     
     [c, d, in] = generate_det_dot_phi(o);
     code = [code, c];
     data = [data, d];
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops);
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops); % inside condition
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops); % inside condition
     
     [c, d, in] = generate_conditions_rho(o);
     code = [code, c];
     data = [data, d];
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
     
 else
     
@@ -883,8 +883,8 @@ else
     % generate det_dot_phi, det_phi, condition_rho
     code = [code, c];
     data = [data, d];
-    info.flops.it = falcopt.addFlops(info.flops.it, in.flops.it);
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops.ls);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops.it);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops.ls);
 end
 
 %% check conditions on the penalty parameter
@@ -927,7 +927,7 @@ end
 
 if o.merit_function == 0
     
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
         '\t\t\t' 't = 1.0;' '\n',...
         '\t\t\t' 't_u = 1.0;' '\n',...
         '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
@@ -937,22 +937,22 @@ if o.merit_function == 0
     % generate weighted_sum_Nnu() and weighted_sum_Nnc()
     code = [code, c];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     [c,d,in] = generate_weighted_sum_nu(o);
     % generate weighted_sum_Nnu() and weighted_sum_Nnc()
     code = [code, c];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     if o.merit_function == 0
-        info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops); % Used twice
+        info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops); % Used twice
     end
     
     [c,d,in] = generate_quadratic_interpolation(o);
     
     code = [code, c, sprintf('\n\n')];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     
     optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
@@ -988,14 +988,14 @@ if o.merit_function == 0
     end
     
     
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
         '\t\t\t\t\t' 'break;' '\n',...
         '\t\t\t\t' 'else {' '\n',...
         '\t\t\t\t\t' 't_u = t;' '\n',...
         '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t' '}' '\n',...
         '\t\t\t' '}' '\n',...
-        '\t\t\t' 'if (t_u <= ' falcopt.num2str(o.tolLs, o.precision) ')' '\n',...
+        '\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
         '\t\t\t\t' 'cond_err = 0;' '\n',...
         '\t\t' '}' '\n',...
         '\t\t' 'else' '\n',...
@@ -1007,7 +1007,7 @@ if o.merit_function == 0
 else
     %% recompute rho
     
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
         '\t\t\t' 't = 1.0;' '\n',...
         '\t\t\t' 't_u = 1.0;' '\n',...
         '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
@@ -1017,22 +1017,22 @@ else
     % generate weighted_sum_Nnu() and weighted_sum_Nnc()
     code = [code, c];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     [c,d,in] = generate_weighted_sum_nu(o);
     % generate weighted_sum_Nnu() and weighted_sum_Nnc()
     code = [code, c];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     if o.merit_function == 0
-        info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops); % Used twice
+        info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops); % Used twice
     end
     
     [c,d,in] = generate_quadratic_interpolation(o);
     
     code = [code, c, sprintf('\n\n')];
     data = [data, d];
-    info.flops.ls = falcopt.addFlops(info.flops.ls, in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     
     optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
@@ -1064,13 +1064,13 @@ else
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
         '\t\t\t\t\t' 'break;' '\n',...
         '\t\t\t\t' 'else {' '\n',...
         '\t\t\t\t\t' 't_u = t;' '\n',...
         '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t' '}' '\n',...
-        '\t\t\t\t' 'if (t_u <= ' falcopt.num2str(o.tolLs, o.precision) ')' '\n'...
+        '\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n'...
         '\t\t\t\t\t' 'reset_rho = 1;' '\n'...
         '\t\t\t' '}' '\n'])];
     
@@ -1116,13 +1116,13 @@ else
         optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+    optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
         '\t\t\t\t\t\t' 'break;' '\n',...
         '\t\t\t\t\t' 'else {' '\n',...
         '\t\t\t\t\t\t' 't_u = t;' '\n',...
         '\t\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t\t' '}' '\n',...
-        '\t\t\t\t\t' 'if (t_u <= ' falcopt.num2str(o.tolLs, o.precision) ')' '\n',...
+        '\t\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
         '\t\t\t\t\t\t' 'cond_err = 0;' '\n',...
         '\t\t\t\t' '}' '\n',...
         '\t\t\t' '}' '\n',...
@@ -1165,13 +1165,13 @@ optCode = [optCode, sprintf(['\t\t' 'copy_Nnu(u,up);' '\n',...
 %% check convergence
 
 [c, d, in] = generate_compute_max(o);
-info.flops.it = falcopt.addFlops(info.flops.it, in.flops);
+info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 % compute_max_Nnc
 
 code = [code, c, sprintf('\n\n')];
 data = [data, d];
 
-optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.num2str(o.eps, o.precision) '))' '\n'])];
+optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
 optCode = [optCode,sprintf(['\t\t\t' 'conditions_x = 1;' '\n',...
     '\t\t' 'else' '\n',...
     '\t\t\t' 'conditions_x = 0;' '\n'])];
@@ -2232,26 +2232,26 @@ info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 [c, d, in] = generate_auxiliary_functions(o);
 code = [code, c];
 data = [data, d];
-in.flops = falcopt.multFlops(in.flops, N);
-info.flops.it = falcopt.addFlops(info.flops.it,in.flops);
-info.flops.ls = falcopt.addFlops(info.flops.ls,in.flops);
+in.flops = falcopt.internal.multFlops(in.flops, N);
+info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
+info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
 
 
 [c, d, in] = generate_product_and_sum_nx(o);
 code = [code, c];
 data = [data, d];
-in.flops = falcopt.multFlops(in.flops, N-1);
-info.flops.it = falcopt.addFlops(info.flops.it,in.flops);
-info.flops.ls = falcopt.addFlops(info.flops.ls,in.flops);
+in.flops = falcopt.internal.multFlops(in.flops, N-1);
+info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
+info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
 
 
 if trackRef
     [c, d, in] = generate_diffXU(o);
     code = [code, c];
     data = [data, d];
-    in.flops = falcopt.multFlops(in.flops, N);
-    info.flops.it = falcopt.addFlops(info.flops.it,in.flops);
-    info.flops.ls = falcopt.addFlops(info.flops.ls,in.flops);
+    in.flops = falcopt.internal.multFlops(in.flops, N);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
 end
 
 
@@ -2577,7 +2577,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 [d, c] = falcopt.generateMVMult(P, ...
     'names', struct('fun', 'Pmul', 'M', 'P', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2597,7 +2597,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 [d, c, in] = falcopt.generateMVMult(ones(1,nx), ...
     'names', struct('fun', 'dot_product_nx_nx', 'M', 'R',...
@@ -2607,7 +2607,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 [d, c, in] = falcopt.generateMVMult(ones(1,nu), ...
     'names', struct('fun', 'dot_product_nu_nu', 'M', 'R',...
@@ -2617,7 +2617,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 
 [d, c, in] = falcopt.generateMVMult({o.Jac_u_struct,eye(nu)}, ...
@@ -2628,7 +2628,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 
 % [d, c] = falcopt.generateMVMult({eye(nc),eye(nc)}, ... % To Be deleted
@@ -2668,7 +2668,7 @@ if o.contractive|| o.terminal
         'inline', o.inline, 'indent', o.indent);
     
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     [~, c, in] = falcopt.generateMVMult({o.Jac_u_struct}, ...
         'names', struct('fun', 'product_contr_nu', 'M', {{'A'}},...
@@ -2677,7 +2677,7 @@ if o.contractive|| o.terminal
         'inline', o.inline, 'indent', o.indent);
     
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
 end
 
@@ -2689,7 +2689,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 end
 
@@ -2708,7 +2708,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 [d, c, in] = falcopt.generateMVMult({eye(nu), -eye(nu)}, ...
     'names', struct('fun', 'diffU', 'M', {{'I', 'mI'}}, 'v', {{'u', 'uref'}}, 'r', 'du'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2717,7 +2717,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
 function [code, data, info, optCode] = generate_slack_initialization(o)
@@ -2884,7 +2884,7 @@ for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void build_vNnc_lb(const ' o.real '* gps, '...
@@ -2910,7 +2910,7 @@ for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
 if ~isempty(o.K_ub)
@@ -2937,7 +2937,7 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     [d, c, in] = falcopt.generateMVMult({1/alpha*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})}, ...
         'names', struct('fun', ['build_vNnc_n_' num2str(jj)], 'M', {{ ['alpha_inv_n_' num2str(jj)], ['temp_n' num2str(jj)]}},...
@@ -2948,7 +2948,7 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
 if ~isempty(o.K_n)
@@ -2982,7 +2982,7 @@ end
 %     data = [data, d, sprintf('\n')];
 % end
 % code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.addFlops(info.flops, in.flops);
+% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 %
 % [d, c, in] = falcopt.generateMVMult({1/alpha*eye(nc), -eye(nc)}, ...
 %     'names', struct('fun', 'scale_sub_nc', 'M', {{'alpha_inv', 'mI'}},...
@@ -2991,7 +2991,7 @@ end
 %     data = [data, d, sprintf('\n')];
 % end
 % code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.addFlops(info.flops, in.flops);
+% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 
 if (o.contractive || o.terminal)
@@ -3020,7 +3020,7 @@ if (o.contractive || o.terminal)
     end
     
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
 end
     
@@ -3041,7 +3041,7 @@ for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void minus_Ina_muG(const ' o.real '* muG, '...
@@ -3067,7 +3067,7 @@ for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void Inb_muG(const ' o.real '* muG, '...
@@ -3093,7 +3093,7 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         data = [data, d, sprintf('\n')];
     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 end
 
@@ -3119,7 +3119,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
 [d, c, in] = falcopt.generateMVMult(-alpha*eye(nu), ...
     'names', struct('fun', 'minus_scale_nu', 'M', {{'m_alpha'}},...
@@ -3128,7 +3128,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 
 
@@ -3141,7 +3141,7 @@ info.flops = falcopt.addFlops(info.flops, in.flops);
 %     data = [data, d, sprintf('\n')];
 % end
 % code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.addFlops(info.flops, in.flops);
+% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 for jj=1:length(o.K_nc)
     [~, c, in] = falcopt.generateMVMult(-alpha*eye(o.nc(o.K_nc{jj}(1))), ...
@@ -3152,7 +3152,7 @@ for jj=1:length(o.K_nc)
     %         data = [data, d, sprintf('\n')];
     %     end
     code = [code, c, sprintf('\n\n')];
-    info.flops = falcopt.addFlops(info.flops, in.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     code = [code, sprintf([o.inline ' void product_matlab_nc_' num2str(jj) '(const ' o.real '* x, const '...
         o.real '* y, ' o.real '* z){' '\n\n',...
@@ -3192,7 +3192,7 @@ end
 [c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'types', o.real,'precision', o.precision, ...
     'indent', o.indent, 'inline', o.inline, 'verbose', max(0,o.verbose-1), 'test', o.test);
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 % Gradient step function
 code = [code, sprintf([o.inline ' void gradient_step(const ' o.real '* dot_J, const ' o.real '* u, const ' o.real '* sl,' '\n',...
@@ -3265,7 +3265,7 @@ if (o.forceGradient) % This if is to be deleted
     %         code = [code, sprintf(['\t\t' 'scale_sub_nc(&v_Nnc[ii*%d], &gps[ii*%d], Dg_dot_J); ' '\n'],nc,nc)];
     if (o.contractive || o.terminal)
         code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            '\t' 'v_Nnc[%d] = ' falcopt.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+            '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     end
     
     % TODO: incorporate Dn when available
@@ -3324,7 +3324,7 @@ if (o.forceGradient) % This if is to be deleted
             '\n'], ii-1, sum(o.nc(1:ii-1)) )];
     end
     if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+        code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
     end
     
     code = [code, sprintf(['}' '\n\n'])];
@@ -3364,7 +3364,7 @@ else % the following has to be deleted
 end
 
 % multiply the for N the flops ( inside for-cycle)
-info.flops = falcopt.multFlops( info.flops, N);
+info.flops = falcopt.internal.multFlops( info.flops, N);
 
 % product_matrix_nc(a,x,B,y, z)
 % a is a static scalar, gpy is a nc dynamic vector, Dg is a nu*nc dynamic
@@ -3530,7 +3530,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
 function [code, data, info] = generate_dot_product_Nnc(o)
@@ -3545,7 +3545,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
 function [code, data] = generate_copy(o)
@@ -3676,7 +3676,7 @@ if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
 code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 optCode = [];
 
@@ -3755,7 +3755,7 @@ code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real 
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
 code = [code, sprintf(['\t' 'unsigned int res = 2;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'if (dot_phi <= ' falcopt.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
+code = [code, sprintf(['\t' 'if (dot_phi <= ' falcopt.internal.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
 code = [code, sprintf(['\t\t' 'res = 1;' '\n',...
     '\t' 'else' '\n',...
     '\t\t' 'res = 0;' '\n\n',...
@@ -3909,7 +3909,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
     'static', struct('M',[false,true]),...
     'types', o.real, 'precision', o.precision, 'structure', 'unique', ...
     'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
@@ -3926,7 +3926,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
     'static', struct('M',[false,true]),...
     'types', o.real, 'precision', o.precision, 'structure', 'unique', ...
     'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-info.flops = falcopt.addFlops(info.flops, in.flops);
+info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
@@ -3950,7 +3950,7 @@ info.flops.div = info.flops.div +1;
 % code = [code, sprintf([o.indent.code o.indent.generic 'a = 0.1*t_u;'
 % '\n'])]; % TBD
 % info.flops.mul = info.flops.mul+1;
-code = [code, sprintf([o.indent.code o.indent.generic 'return ' o.max '(' o.min '(t_theo,' falcopt.num2str(p.tau(2), o.precision) '*t_u), ' falcopt.num2str(p.tau(1), o.precision) '*t_u);' '\n'])];
+code = [code, sprintf([o.indent.code o.indent.generic 'return ' o.max '(' o.min '(t_theo,' falcopt.internal.num2str(p.tau(2), o.precision) '*t_u), ' falcopt.internal.num2str(p.tau(1), o.precision) '*t_u);' '\n'])];
 info.flops.mul = info.flops.mul+2;
 info.flops.add = info.flops.add+1;
 info.flops.comp = info.flops.comp+ 3;

@@ -653,7 +653,7 @@ function [code, info] = generateConstraintInv(varargin)
     %% Generate code to construct various matrices from slacks
     [c, i] = generateSlacksCode(structure, indices, names, dims, options);
     code = [code, sprintf('\n') c sprintf('\n')];
-    info.flops = falcopt.addFlops(info.flops, i.flops);
+    info.flops = falcopt.internal.addFlops(info.flops, i.flops);
     
     %% Generate code
     code = [code, sprintf([options.indent.code '\n'])];

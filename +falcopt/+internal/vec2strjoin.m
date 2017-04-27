@@ -1,12 +1,12 @@
 %% vec2strjoin Internal helper function to transform vectors into compact, readable strings for C
-% s = falcopt.vec2strjoin(v, sep, [options])
+% s = falcopt.internal.vec2strjoin(v, sep, [options])
 %
 % Given a vector v returns a string representation of use in C code.
 % The numbers in v are separated by a string provided in "sep".
 %
 % the following options are available:
 % .precision - The precision (optional) determines how the number if printend.
-%               Default: 'integer'. See also falcopt.num2str
+%               Default: 'integer'. See also falcopt.internal.num2str
 %
 
 % Copyright (c) 2017 Damian Frick <falcopt@damianfrick.com>
@@ -40,6 +40,6 @@ function s = vec2strjoin(varargin)
     p.parse(varargin{:});
     options = p.Results;
 
-    s = strjoin(cellfun(@(s)(falcopt.num2str(s, options.precision)), num2cell(options.v), 'UniformOutput', false), options.sep);
+    s = strjoin(cellfun(@(s)(falcopt.internal.num2str(s, options.precision)), num2cell(options.v), 'UniformOutput', false), options.sep);
 
 end

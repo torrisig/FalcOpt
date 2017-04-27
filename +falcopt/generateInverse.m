@@ -334,16 +334,16 @@ function [code, info] = generateInverse(varargin)
         fprintf(f, ['\n'  options.types.fun ' transform_' names.M '(const double* M, ' options.types.data '* Mt) {' '\n']);
         if strcmp(options.structure.M, 'dense')
             % TODO
-%             fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(elements.M.data.row-1, ', ') '};' '\n'], elements.M.data.num);
-%             fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(elements.M.data.col-1, ', ') '};' '\n'], elements.M.data.num);
-%             fprintf(f, [options.indent.generic 'const unsigned int indices[%i] = {' falcopt.vec2strjoin(elements.M.data.indices-1, ', ') '};' '\n'], elements.M.data.num);
+%             fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.internal.vec2strjoin(elements.M.data.row-1, ', ') '};' '\n'], elements.M.data.num);
+%             fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.internal.vec2strjoin(elements.M.data.col-1, ', ') '};' '\n'], elements.M.data.num);
+%             fprintf(f, [options.indent.generic 'const unsigned int indices[%i] = {' falcopt.internal.vec2strjoin(elements.M.data.indices-1, ', ') '};' '\n'], elements.M.data.num);
 %             fprintf(f, [options.indent.generic 'unsigned int i;' '\n' ...
 %                         options.indent.generic 'for(i=0; i<%i; i++) {' '\n' ...
 %                         options.indent.generic options.indent.generic 'Mt[indices[i]] = (' options.types.data ')(M[cols[i]*%i+rows[i]]);' '\n' ...
 %                         options.indent.generic '}' '\n'], elements.M.data.num(i), dims.n);
         else
-            fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(elements.M.data.row-1, ', ') '};' '\n'], elements.M.data.num);
-            fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(elements.M.data.col-1, ', ') '};' '\n'], elements.M.data.num);
+            fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.internal.vec2strjoin(elements.M.data.row-1, ', ') '};' '\n'], elements.M.data.num);
+            fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.internal.vec2strjoin(elements.M.data.col-1, ', ') '};' '\n'], elements.M.data.num);
             fprintf(f, [options.indent.generic 'unsigned int i;' '\n' ...
                         options.indent.generic 'for(i=0; i<%i; i++) {' '\n' ...
                         options.indent.generic options.indent.generic 'Mt[i] = (' options.types.data ')(M[cols[i]*%i+rows[i]]);' '\n' ...
@@ -354,8 +354,8 @@ function [code, info] = generateInverse(varargin)
         if strcmp(options.structure.Mi, 'dense')
             % TODO
         else
-            fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(elements.Mi.data.row-1, ', ') '};' '\n'], elements.Mi.data.num);
-            fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(elements.Mi.data.col-1, ', ') '};' '\n'], elements.Mi.data.num);
+            fprintf(f, [options.indent.generic 'const unsigned int rows[%i] = {' falcopt.internal.vec2strjoin(elements.Mi.data.row-1, ', ') '};' '\n'], elements.Mi.data.num);
+            fprintf(f, [options.indent.generic 'const unsigned int cols[%i] = {' falcopt.internal.vec2strjoin(elements.Mi.data.col-1, ', ') '};' '\n'], elements.Mi.data.num);
             fprintf(f, [options.indent.generic 'unsigned int i;' '\n' ...
                         options.indent.generic 'for(i=0; i<%i; i++) {' '\n' ...
                         options.indent.generic options.indent.generic 'Mt[cols[i]*%i+rows[i]] = (' options.types.data ')(M[i]);' '\n' ...
