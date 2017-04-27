@@ -662,7 +662,7 @@ function [code, info] = generateConstraintInv(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.m1 '[' num2str(max(dims.mm1)) '];' ' '])];
         code = [code, sprintf([options.types.data ' ' names.m2 '[' num2str(max(dims.mm2)) '];' '\n'])];
     end
-    code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tmp '[' num2str(max(dims.lb+dims.ub)) '];' '\n'])];
+    code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tmp '[' num2str(max(sum(options.bounds.lb | options.bounds.ub,1))) '];' '\n'])];
     if max(dims.nt) > 0
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.gamma ' = -' names.v '[' num2str(sum(dims.lb)+sum(dims.ub)+sum(dims.np)) ']; /* Initialize ' names.gamma ' with last element of ' names.v ' */' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tau ' = ' names.slacks '[' num2str(sum(dims.lb)+sum(dims.ub)+sum(dims.np)) ']; /* Initialize ' names.tau ' with the last element of ' names.slacks ' plus the squared 2-norm of ' names.dt ' (later) */' '\n'])];
