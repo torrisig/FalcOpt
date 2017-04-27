@@ -1,0 +1,4 @@
+# generated c-code filed
+*.c
+# generated MEX functions
+*.mexa64
