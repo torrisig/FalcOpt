@@ -6,6 +6,7 @@
 %
 % Given a scalar "num" returns a string representation for C.
 % The precision (optional) determines how the number if printend.
+%  'integer' means integer precision (default)
 %  'double' means double-precision floating-point format
 %   e.g. num = 101 becomes '101.0',
 %        num = 3.141592653589793116... becomes s = '3.141592653589793' and
@@ -38,7 +39,7 @@
 %
 function s = num2str(varargin)
     precisions = {'double', 'single', 'integer'};
-    defaultPrecision = 'double';
+    defaultPrecision = 'integer';
     
     p = inputParser;
     p.addRequired('num', @(x)(isnumeric(x) && numel(x) == 1));

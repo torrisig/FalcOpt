@@ -349,11 +349,11 @@ function [data, code, info] = generateData(varargin)
         if options.noones && info.ones.num > 0
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic '/* Initialize -1''s and 1''s */' '\n'])];
             if ~options.transpose
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_rows[%i] = {' falcopt.vec2strjoin(info.ones.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.ones.num)];
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_cols[%i] = {' falcopt.vec2strjoin(info.ones.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.ones.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_rows[%i] = {' falcopt.vec2strjoin(info.ones.rows-1, ', ') '};' '\n'], info.ones.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_cols[%i] = {' falcopt.vec2strjoin(info.ones.cols-1, ', ') '};' '\n'], info.ones.num)];
             else % Negate transpose
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_rows[%i] = {' falcopt.vec2strjoin(info.ones.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.ones.num)];
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_cols[%i] = {' falcopt.vec2strjoin(info.ones.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.ones.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_rows[%i] = {' falcopt.vec2strjoin(info.ones.cols-1, ', ') '};' '\n'], info.ones.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int ones_cols[%i] = {' falcopt.vec2strjoin(info.ones.rows-1, ', ') '};' '\n'], info.ones.num)];
             end
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const double ones_sign[%i] = {' falcopt.vec2strjoin(info.ones.sign, ', ', 'precision', options.precision) '};' '\n'], info.ones.num)];
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'for(i=0; i<%i; i++) { /* Iterate over 1-elements */' '\n'], info.ones.num)];
@@ -363,11 +363,11 @@ function [data, code, info] = generateData(varargin)
         if info.structure.stored.num > 0
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic '/* Copy non-zero values */' '\n'])];
             if ~options.transpose
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.access.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.access.num)];
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.access.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.access.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.access.rows-1, ', ') '};' '\n'], info.structure.access.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.access.cols-1, ', ') '};' '\n'], info.structure.access.num)];
             else % Negate transpose
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.access.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.access.num)];
-                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.access.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.access.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.access.cols-1, ', ') '};' '\n'], info.structure.access.num)];
+                code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.access.rows-1, ', ') '};' '\n'], info.structure.access.num)];
             end
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'const unsigned int indices[%i] = {' falcopt.vec2strjoin(info.structure.access.indices-1, ', ') '};' '\n'], info.structure.access.num)];
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'for(i=0; i<%i; i++) { /* Iterate over non-zero elements */' '\n'], info.structure.access.num)];
@@ -389,11 +389,11 @@ function [data, code, info] = generateData(varargin)
             code.fromDense = [code.fromDense, sprintf([options.indent.code 'void ' names.fromDense '(const double* ' names.M ', ' options.type '* ' names.M 't) {' '\n'])];
             code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'unsigned int i;' '\n'])];
             if ~options.transpose
-                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.stored.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.stored.num)];
-                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.stored.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.stored.num)];
+                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.stored.rows-1, ', ') '};' '\n'], info.structure.stored.num)];
+                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.stored.cols-1, ', ') '};' '\n'], info.structure.stored.num)];
             else % Negate transpose
-                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.stored.cols-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.stored.num)];
-                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.stored.rows-1, ', ', 'precision', 'integer') '};' '\n'], info.structure.stored.num)];
+                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int rows[%i] = {' falcopt.vec2strjoin(info.structure.stored.cols-1, ', ') '};' '\n'], info.structure.stored.num)];
+                code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'const unsigned int cols[%i] = {' falcopt.vec2strjoin(info.structure.stored.rows-1, ', ') '};' '\n'], info.structure.stored.num)];
             end
             code.fromDense = [code.fromDense, sprintf([options.indent.code options.indent.generic 'for(i=0; i<%i; i++) { /* Iterate over non-zero elements */' '\n'], info.structure.stored.num)];
             if strcmp(options.type, 'double')

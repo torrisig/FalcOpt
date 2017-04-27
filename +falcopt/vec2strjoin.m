@@ -6,7 +6,7 @@
 %
 % the following options are available:
 % .precision - The precision (optional) determines how the number if printend.
-%               Default: 'double'. See also falcopt.num2str
+%               Default: 'integer'. See also falcopt.num2str
 %
 
 % Copyright (c) 2017 Damian Frick <falcopt@damianfrick.com>
@@ -31,7 +31,7 @@
 %
 function s = vec2strjoin(varargin)
     precisions = {'double', 'single', 'integer'};
-    defaultPrecision = 'double';
+    defaultPrecision = 'integer';
 
     p = inputParser;
     p.addRequired('v', @isnumeric);
