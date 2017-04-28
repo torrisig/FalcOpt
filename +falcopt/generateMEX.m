@@ -105,10 +105,7 @@ function code = generateMEX(varargin)
                 options.precision = 'double';
         end
     end
-    % TODO single should not be an option
     switch options.type
-        case 'single'
-            dataType = 'float';
         case 'double'
             dataType = 'double';
         case 'float'
