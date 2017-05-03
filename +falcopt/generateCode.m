@@ -101,8 +101,6 @@ p.addParameter('Jac_u_struct',Inf,@isnumeric);
 p.addParameter('Jac_g_struct',Inf,@isnumeric);
 p.addParameter('Jac_m_struct',Inf,@isnumeric);
 p.addParameter('Jac_n_struct',[],@isnumeric);
-p.addParameter('amu_struct',Inf,@iscell);
-p.addParameter('umb_struct',Inf,@iscell);
 p.addParameter('merit_function', 2, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
 p.addParameter('contractive', false, @islogical);
 p.addParameter('terminal', false, @islogical);
@@ -242,20 +240,14 @@ for jj=1:o.N
     end
 end
 
-if isequal(o.gradients,'ccode')
-    o.K_amu = o.amu_struct;
-    o.K_umb = o.umb_struct;
-    o.K_lb = [];
-    o.K_ub = [];
-else
-    o.K_amu = detect_structure( o.box_lowerBound,o );
-    cons_lb = ~isinf(o.box_lowerBound);
-    o.K_lb = detect_structure( cons_lb(:,sum(cons_lb,1) >= 1), o );
-    o.K_umb = detect_structure( o.box_upperBound,o );
-    cons_ub = ~isinf(o.box_upperBound);
-    o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1), o );
 
-end
+o.K_amu = detect_structure( o.box_lowerBound,o );
+cons_lb = ~isinf(o.box_lowerBound);
+o.K_lb = detect_structure( cons_lb(:,sum(cons_lb,1) >= 1), o );
+o.K_umb = detect_structure( o.box_upperBound,o );
+cons_ub = ~isinf(o.box_upperBound);
+o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1), o );
+
 
 % TO BE DELETED
 %     if ( ~isempty(o.box_constraints))
@@ -627,21 +619,11 @@ switch o.gradients
             o.Jac_m_struct = i.Jac_m_struct;
         end
     case 'ccode'
-        % build o.nc (constraints structure) % ToDo TOmmaso
-        o.nc = cell2mat(o.nn);
+        [ d, c, i] = generate_n_and_Dn( o,'ccode');
+        code = [code, c];
+        data = [data, d];
+        o.nc = i.nc;
         
-        
-        if( o.terminal || o.contractive)
-            o.nc = [o.nc 1];
-        else
-            o.nc = [o.nc 0];
-        end
-        
-        for i=1:o.N 
-            lb = sum(~isinf(o.box_lowerBound(:,i)));
-            ub = sum(~isinf(o.box_upperBound(:,i)));
-            o.nc(i) = o.nc(i)+lb+ub;
-        end
     end   
         
         
@@ -1672,7 +1654,7 @@ end
 %     ibox = 1;
 % end
 
-if ~isempty(o.K_n)
+if ~isempty(o.K_n)&& ~isequal(grad,'ccode')
     nl_con = 1;
 else
     nl_con = 0;
