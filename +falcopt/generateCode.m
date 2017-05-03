@@ -2316,7 +2316,7 @@ end
 
 if o.terminal
     code = [code, sprintf(['\t' '(*psi_N) = 0.5*tmp_x;' '\n',...
-        '\t' 'copy_Nnu(Px_contr,Px);' '\n'])];
+        '\t' 'copy_nx(Px_contr,Px);' '\n'])];
     
 end
 
