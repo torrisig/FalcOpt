@@ -31,7 +31,7 @@
 %   box_lowerBound     - Lower bound constraint for the inputs 
 %   box_upperBound     - Upper bound constraint for the inputs 
 %   constraints_handle - A function handle for provided nonlinear constraint function
-%   nn                 - Number of nonlinear constraints (per stage)
+%   nn                 - number of nonlinear constraints (per stage)
 %   contractive        - A boolean. Default: 'false'
 %   terminal           - A boolean. Default: 'false'
 %   precision          - 'double'(default) or 'single'
@@ -155,7 +155,7 @@ p.addParameter('terminal', false, @islogical);
 p.addParameter('forceGradient',true,@islogical); % This parameter is to be deleted when converter example works without build_tbi()
 p.addParameter('box_lowerBound', [], @isnumeric);
 p.addParameter('box_upperBound', [], @isnumeric);
-p.addParameter('constraints_handle', Inf, @(x) (iscell(x) || isa(x,'function_handle')));
+p.addParameter('constraints_handle', [], @(x) (iscell(x) || isa(x,'function_handle')));
 p.addParameter('gradients', 'casadi', @(x)(ischar(x)));
 p.addParameter('external_jacobian_x', [], @(x)isa(x,'function_handle'));
 p.addParameter('external_jacobian_u', [], @(x)isa(x,'function_handle'));
@@ -318,7 +318,7 @@ o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1), o );
 %% nonlinear constraint handle
 
 if (any(size(o.constraints_handle)~= [1,o.N])&&any(size(o.constraints_handle)~= [o.N,1]))&&...
-        (isempty(o.constraints_handle)&&any(size(o.constraints_handle)~= [1,1]))
+        (~isempty(o.constraints_handle)&&any(size(o.constraints_handle)~= [1,1]))
     error('constraints_handle must be either empty, or a function handle, or a cell of function handles of dimension [N,1]');
 end
 if length(o.constraints_handle) >1
@@ -372,23 +372,25 @@ elseif min(size(o.nn) == [1,1])
 end
 
 % check dims of the function handles
-for ii = 1:o.N
-    test_u1 = ones(1,o.nu);
-    test_f1 = o.constraints_handle{ii}(test_u1);
-    
-    test_u2 = ones(o.nu,1);
-    test_f2 = o.constraints_handle{ii}(test_u2);
-    
-    if ((size(test_f1, 1) > 1) && (size(test_f1, 2) > 1))&&((size(test_f2, 1) > 1) && (size(test_f2, 2) > 1))
-        error('The output of the nonlinear constraint function handles must be a vector');
-    end
-    if any(test_f1(:) ~= Inf)&&(any(size(test_f1) ~= [o.nn{ii},1]) && any(size(test_f1) ~= [1,o.nn{ii}]))&&...
-            (any(size(test_f2) ~= [o.nn{ii},1]) && any(size(test_f2) ~= [1,o.nn{ii}]))
-        error('The output of the nonlinear constraint function handle %i is not of length %d',ii,o.nn{ii});
+if ~isempty(o.K_n)
+    for ii = 1:o.N
+        test_u1 = ones(1,o.nu);
+        test_f1 = o.constraints_handle{ii}(test_u1);
+
+        test_u2 = ones(o.nu,1);
+        test_f2 = o.constraints_handle{ii}(test_u2);
+
+        if ((size(test_f1, 1) > 1) && (size(test_f1, 2) > 1))&&((size(test_f2, 1) > 1) && (size(test_f2, 2) > 1))
+            error('The output of the nonlinear constraint function handles must be a vector');
+        end
+        if any(test_f1(:) ~= Inf)&&(any(size(test_f1) ~= [o.nn{ii},1]) && any(size(test_f1) ~= [1,o.nn{ii}]))&&...
+                (any(size(test_f2) ~= [o.nn{ii},1]) && any(size(test_f2) ~= [1,o.nn{ii}]))
+            error('The output of the nonlinear constraint function handle %i is not of length %d',ii,o.nn{ii});
+        end
     end
 end
 
-% check dimension of o.jac_n_struct if porvided
+% check dimension of o.jac_n_struct if provided
 if ~isempty(o.Jac_n_struct)
     if ~iscell(o.Jac_n_struct)
         o.Jac_n_struct = repmat({o.Jac_n_struct}, 1,o.N);
