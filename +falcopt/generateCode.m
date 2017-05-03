@@ -23,47 +23,95 @@
 % fprintf(file,[libr '\n' data '\n' code_spec '\n' code_alg '\n' optCode])
 %
 % The following options are available:
-%   .nw                 - Known disturbance dimension
-%   .trackReference     - A boolean. Track a desired time-varying reference. Default: false
-%   .stepSize           - Step size alpha. Default: 0.3
-%   .parLs              - Armijo line search step parameter. Default: 0.3
-%   .maxIt              - Max number of iterations. Default: 1000
-%   .maxItLs            - Max number of line search iterations. Default: 10
-%   .eps                - Tolerance. Defualt: 1e-6
-%   .tolLs              - Line search min progress. Default: 1e-4
-%   .precision          - 'double'(default) or 'single'
-%   .indent             - Indentation to be used in code generation.
-%                         Default: '\t'
-%   .inline             - Inline keyword to be used. Default: 'inline'
-%   .gendir             - Path of the .c file folder
-%   .verbose            - Level of procedural output of this function.
-%                         Default: 0
-%   .test               - Level of tests performed. Default: 0
-%   .debug              - Level of debug. Default: 1
-%   .Jac_x_static       - Boolean, false(default): Jacobian_x is dynamic
-%   .Jac_u_static       - Boolean, false(default): Jacobian_u is dynamic
-%   .Jac_x_struct       - Matrix containing the structure of the Jacobian_x
-%   .Jac_u_struct       - Matrix containing the structure of the Jacobian_u
-%   .Jac_g_struct       - Matrix containing the structure of the Jacobian_g
-%   .Jac_m_struct       - Matrix containing the structure of the Jacobian_m
-%   .Jac_n_struct       - Matrix containing the structure of the Jacobian_n
-%   .merit_function     - 1,2(default) or Inf
-%   .contractive        - A boolean. Default: 'false'
-%   .terminal           - A boolean. Default: 'false'
-%   .constraints_handle - A function handle to provided nonlinear constraint function
-%   .gradients          - Different way of automatic function differentiation/generation
-%                         Can be: 'casadi','matlab','manual' or 'ccode'. Default: 'casadi'
-%   .external_jacobian_x- Function handle to provide jacobian_x (only with options gradients = 'manual')
-%   .external_jacobian_u- Function handle to provide jacobian_u (only with options gradients = 'manual')
-%   .external_jacobian_n- Function handle to provide jacobian_n (only with options gradients = 'manual')
 %
-% user supplied functions: model_mpc(real* x, real* u, real* xp);
-%                          Jacobian_x(real*x, real* u, real* F);
-%                          Jacobian_u(real* x, real* u, real* G);
-%                          build_g(real* u, real* gpsl);
-%                          build_Dg(real* u, real* Dg);
-%                          build_inv(real* u, real* sl, real* inv);
-
+% Problem definition options
+%
+%   nw                 - Known disturbance dimension
+%   trackReference     - A boolean. Track a desired time-varying reference. Default: false
+%   box_lowerBound     - Lower bound constraint for the inputs 
+%   box_upperBound     - Upper bound constraint for the inputs 
+%   constraints_handle - A function handle for provided nonlinear constraint function
+%   nn                 - Number of nonlinear constraints (per stage)
+%   contractive        - A boolean. Default: 'false'
+%   terminal           - A boolean. Default: 'false'
+%   precision          - 'double'(default) or 'single'
+%
+% Computation of Jacobians 
+%
+%   gradients          - Different way of automatic function differentiation/generation
+%                         Can be: 'casadi','matlab','manual' or 'ccode'. Default: 'casadi'
+%   Jac_x_static       - Boolean, false(default): Jacobian_x is dynamic
+%                         (i.e., it depends on x and/or u)
+%   Jac_u_static       - Boolean, false(default): Jacobian_u is dynamic
+%                         (i.e., it depends on x and/or u)
+%   external_jacobian_x- Function handle to provide jacobian_x 
+%                         (only with options gradients = 'manual')
+%   external_jacobian_u- Function handle to provide jacobian_u 
+%                         (only with options gradients = 'manual')
+%   external_jacobian_n- Function handle to provide jacobian_n 
+%                         (only with options gradients = 'manual')
+%   Jac_x_struct       - Matrix containing the structure of the derivative
+%                         of 'dynamics' wrt to x (only for 'gradients' =
+%                         'ccode')
+%   Jac_u_struct       - Matrix containing the structure of the derivative
+%                         of 'dynamics' wrt to u (only for 'gradients' =
+%                         'ccode')
+%   Jac_g_struct       - Matrix containing the structure of the derivative
+%                         of 'constraints_handle' wrt to u (only for 
+%                         'gradients' = 'ccode')
+%
+% Tolerance and max iteration settings 
+%
+%   eps                - Tolerance on KKT optimality. Default: 1e-3
+%   maxIt              - Max number of iterations. Default: 4000
+%   maxItLs            - Max number of line search iterations. Default: 10
+%
+% Algorithm parameters
+%
+%   merit_function     - Merit function:
+%                        0: Augmented Lagrangian
+%                        1,2(default) or Inf: l_1, l_2(default) or l_Inf
+%                         non-smooth penalty function
+%   stepSize           - Gradient step size. Default: 0.3
+%   parLs              - Armijo line search step parameter. Default: 0.3
+%   tolLs              - Line search min progress. Default: 1e-4
+%
+% Code generation settings
+%
+%   build_MEX          - Produce MEX file for use in Matlab. Default: true 
+%   name               - Name of the .c and .mex file (if any) 
+%   gendir             - Path of the .c file folder
+%   compile            - Compile the generated code. Default: true
+%   verbose            - Level of procedural output of this function.
+%                         Default: 0
+%   test               - Level of internal numerical tests performed. 
+%                         Default: 0
+%   debug              - Level of debug (number of inputs/outputs of 
+%                         generated functions). Default: 1
+%   indent             - Indentation to be used in code generation.
+%                         Default: '\t'
+%   inline             - Inline keyword to be used. Default: 'inline'
+%
+% Copyright (c) 2017 Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
+%                    Tommaso Robbiani <tommasro@student.ethz.ch>
+% 
+% Permission is hereby granted, free of charge, to any person obtaining a copy
+% of this software and associated documentation files (the "Software"), to deal
+% in the Software without restriction, including without limitation the rights
+% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+% copies of the Software, and to permit persons to whom the Software is
+% furnished to do so, subject to the following conditions:
+% 
+% The above copyright notice and this permission notice shall be included in all
+% copies or substantial portions of the Software.
+% 
+% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+% SOFTWARE.
 
 function [info] = generateCode(varargin)
 indentTypes = {'generic', 'data', 'code'};
@@ -82,7 +130,7 @@ p.addParameter('stepSize', 0.3, @(x)(isnumeric(x) && x > 0)); % step size alpha
 p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
 p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
 p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
-p.addParameter('eps', 1e-6, @(x)(isnumeric(x) && x >= eps)); % tolerance
+p.addParameter('eps', 1e-3, @(x)(isnumeric(x) && x >= eps)); % tolerance
 p.addParameter('tolLs', 1e-4, @(x)(isnumeric(x) && x >= eps)); % line search min progress
 p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
 p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t'), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
@@ -2612,16 +2660,6 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
-
-% [d, c] = falcopt.generateMVMult({eye(nc),eye(nc)}, ... % To Be deleted
-%     'names', struct('fun', 'sum_nc', 'M', {{'I1', 'I2'}},...
-%     'v', {{'u1', 'u2'}}), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-% 
-% if ~isempty(d)
-%     data = [data, d, sprintf('\n')];
-% end
-% code = [code, c, sprintf('\n\n')];
-
 end
 
 function [code, data, info] = generate_product_and_sum_nx(o)
@@ -2709,8 +2747,6 @@ data = [];
 optCode = [];
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
-nc = o.nc(1);
-nu = o.nu;
 N = o.N;
 
 c_psi_dec = argument_def_internal_psi(o,true);
@@ -2770,8 +2806,6 @@ if (o.contractive || o.terminal)
     code = [code, sprintf(['\t' o.real ' g_contr = 0.0;' '\n'])];
 end
 
-
-
 info.flops.mul = info.flops.mul+ N*3; % mul inside only first cycle % NOT CLEAR, ToDo
 
 
@@ -2804,15 +2838,6 @@ for k = 1:o.N
         o.nc(k), lb(:,k), lb(:,k) + ub(:,k), sum(o.nc(1:k-1)),...
         sum(o.nc(1:k-1)),sum(o.nc(1:k-1)))]; %#ok
 end
-
-% Obsolete, To be Deleted
-% code = [code, sprintf(['\t\t' 'for (jj=0;jj<%d;jj++){' '\n'],nc)];
-%
-% code = [code, sprintf(['\t\t\t' 'sl_sqr[ii*%d + jj] = ' o.max '(1.0, -2.0*g[jj]);' '\n',...
-%     '\t\t\t' 'sl[ii*%d + jj] = ' o.sqrt '(sl_sqr[ii*%d + jj]);' '\n',...
-%     '\t\t' '}' '\n',...
-%     '\t\t' 'half_sum_nc(&gps[ii*%d], &g[0], &sl_sqr[ii*%d]);' '\n',...
-%     '\t' '}' '\n\n'],nc,nc,nc,nc,nc)];
 
 if (o.contractive || o.terminal)
     code = [code, sprintf(['\t' 'g_contr = *psi_N - c_contr;' '\n'...
