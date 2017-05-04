@@ -219,10 +219,10 @@ function [data, code, info] = generateMVMult(varargin)
         options.scale = struct('M', repmat(options.scale, 1, dims.l), 'm', repmat(options.scale, 1, dims.k));
     end
     if ~isfield(options.scale, 'M')
-        options.scale.M = repmat(options.scale, 1, dims.l);
+        options.scale.M = ones(1, dims.l); % Set scaling to 1
     end
     if ~isfield(options.scale, 'm')
-        options.scale.m = repmat(options.scale, 1, dims.k);
+        options.scale.m = ones(1, dims.k); % Set scaling to 1
     end
     if length(options.scale.M) ~= dims.l
         throw(MException([functionId ':InvalidDimension'], ['The number ' num2str(length(options.scale.M)) ' of scaling factors for the matrices M does not match the number ' num2str(dims.l) ' of matrices M.']));
@@ -252,6 +252,18 @@ function [data, code, info] = generateMVMult(varargin)
     elseif length(options.static.m) ~= dims.k
         throw(MException([functionId ':InvalidDimension'], ['The number ' num2str(length(options.static.m)) ' of static flags of vectors m does not match the number ' num2str(dims.k) ' of vectors m.']));
     end
+    
+    % Ensure add and sub options are not enabled simultaneuously
+    if options.add && options.sub
+        throw(MException([functionId ':InvalidParameters'], '"Sub" and "add" cannot be enabled at the same time.'));
+    end
+    % Transform sub into add by changing the sign of the scaling
+    if options.sub
+        options.add = true;
+        options.sub = false;
+        options.scale.M = -options.scale.M;
+        options.scale.m = -options.scale.m;
+    end
     % Directly add scaling to all static matrices and vectors
     for i=1:dims.l
         if options.static.M(i)
@@ -265,12 +277,6 @@ function [data, code, info] = generateMVMult(varargin)
             options.scale.m(i) = 1;
         end
     end
-    
-    % Ensure add and sub options are not enabled simultaneuously
-    if options.add && options.sub
-        throw(MException([functionId ':InvalidParameters'], '"Sub" and "add" cannot be enabled at the same time.'));
-    end
-    
     % Prefix (add prefix to every externally defined element)
     names.fun = [names.prefix names.fun];
     for i=1:dims.l
@@ -557,17 +563,15 @@ function [data, code, info] = generateMVMult(varargin)
         code = [code, sprintf([') {' '\n'])];
     end
     % Code
+    % TODO deal with scale = 0!
     for i=1:dims.m
         % Iterate over elements of r[i]
         if (dims.l > 0 && any(cellfun(@(x)(any(x==i)), elements.M.access.rows))) || (dims.l > 0 && any(cellfun(@(x)(any(x==i)), elements.M.ones.rows))) || (dims.k > 0 && any(cellfun(@(x)(any(x==i)), elements.m.access.rows))) % Whether r[i] is affected by M's or m's
             if options.add
-                code = [code, sprintf([options.indent.code options.indent.generic names.r '[%i] += '], i-1)]; %#ok
-                info.flops.add = info.flops.add+1;
-            elseif options.sub
-                code = [code, sprintf([options.indent.code options.indent.generic names.r '[%i] -= '], i-1)]; %#ok
+                code = [code, sprintf([options.indent.code options.indent.generic names.r '[' num2str(i-1) '] = ' names.r '[' num2str(i-1) ']'])]; %#ok
                 info.flops.add = info.flops.add+1;
             else
-                code = [code, sprintf([options.indent.code options.indent.generic names.r '[%i] = '], i-1)]; %#ok
+                code = [code, sprintf([options.indent.code options.indent.generic names.r '[' num2str(i-1) '] = '])]; %#ok
             end
             bFirst = true;
             % M
@@ -587,8 +591,16 @@ function [data, code, info] = generateMVMult(varargin)
                                     code = [code, sprintf(' - ')]; %#ok
                                 end
                                 info.flops.add = info.flops.add+1;
-                            elseif options.scale.M(j) < 0
-                                code = [code, sprintf('-')]; %#ok
+                            else
+                                if options.add
+                                    if options.scale.M(j) >= 0
+                                        code = [code, sprintf(' + ')]; %#ok
+                                    else
+                                        code = [code, sprintf(' - ')]; %#ok
+                                    end
+                                elseif options.scale.M(j) < 0
+                                    code = [code, sprintf('-')]; %#ok
+                                end
                             end
                             if abs(options.scale.M(j)) == 1
                                 code = [code, sprintf([names.M{j} '[' num2str(elements.M.access.indices{j}(elements.M.access.rows{j} == i & elements.M.access.cols{j} == k)-1) ']*' names.v{j} '[' num2str(k-1) ']'])]; %#ok
@@ -642,7 +654,7 @@ function [data, code, info] = generateMVMult(varargin)
                 end
             end
             code = [code, sprintf(';\n')]; %#ok
-        elseif ~options.add && ~options.sub
+        elseif ~options.add
             code = [code, sprintf([options.indent.code options.indent.generic names.r '[%i] = 0.0'], i-1)]; %#ok
             code = [code, sprintf(';\n')]; %#ok
         end
@@ -681,7 +693,7 @@ function [data, code, info] = generateMVMult(varargin)
                                                     'names', struct('M', 'r', 'toDense', 'transform_R_toOutput', 'fromDense', 'copy_R'), ...
                                                     'indent', struct('generic', options.indent.generic, 'code', ''), ...
                                                     'verbose', 0);
-        if options.add || options.sub % Copy and transform r into appropriate data type
+        if options.add % Copy and transform r into appropriate data type
             fprintf(f, [c.fromDense '\n']);
         end
         if ~strcmp(options.types.data, 'double') % Transform r into appropriate data type for output
@@ -717,7 +729,7 @@ function [data, code, info] = generateMVMult(varargin)
         else
             nInputs = dims.l+sum(~options.static.M & (elements.M.stored.num > 0));
         end
-        if options.add || options.sub
+        if options.add
             nInputs = nInputs+1;
         end
         if nInputs == 1
@@ -729,7 +741,7 @@ function [data, code, info] = generateMVMult(varargin)
         % Return vector r
         fprintf(f, [options.indent.generic 'if(nlhs != 1) { mexErrMsgIdAndTxt("' names.fun ':InvalidInput", "Requires 1 output."); }' '\n']);
         fprintf(f, [options.indent.generic 'plhs[0] = mxCreateDoubleMatrix(%i,1,mxREAL); /* Output vector r */' '\n'], dims.m);
-        if options.add || options.sub
+        if options.add
             fprintf(f, [options.indent.generic '/* Result ' names.r ' (initial value) */' '\n']);
             fprintf(f, [options.indent.generic 'if(!mxIsDouble(prhs[0]) || mxIsComplex(prhs[0]) || mxGetM(prhs[0]) != 1 || mxGetN(prhs[0]) != %i) { mexErrMsgIdAndTxt("' names.fun ':InvalidDimension", "Return vector ' names.r ' has invalid dimension."); }' '\n'], dims.m);
             fprintf(f, [options.indent.generic options.types.data ' ' names.r '[%i]; double* ' names.r '_in = mxGetPr(prhs[0]);' '\n'], dims.m);
