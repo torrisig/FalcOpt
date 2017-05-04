@@ -701,7 +701,7 @@ function [code, info] = generateConstraintInv(varargin)
         info.flops.add = info.flops.add + sum(dims.mt);
         info.flops.mul = info.flops.mul + sum(dims.mt);
     end
-    % TODO add option to not unroll in special cases
+    % TODO do not unroll in special cases
     % TODO finalize FLOPS count
     for k=1:options.N
         code = [code, sprintf(['\n' options.indent.code options.indent.generic '/** k = ' num2str(k-1) ' **/' '\n'])]; %#ok
@@ -1052,12 +1052,10 @@ function [code, info] = generateConstraintInv(varargin)
     if max(dims.nt) > 0
         code = [code, sprintf(['\n' options.indent.code options.indent.generic '/* Finalize ' names.r '_k using ' names.c '_k */' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic names.tau ' = ' names.gamma '/' names.tau '; /* Only ' names.gamma ' divided by ' names.tau ' is needed */' '\n'])];
-        for k=1:options.N
-            if dims.nt(k) > 0
-                code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(dims.lb(k)+dims.ub(k)+dims.np(k)) '; i++) { ' ...
-                                       names.r '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+i] += ' names.tau '*' names.c '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+i];' ...                                     
-                                       ' } /* k = ' num2str(k-1) ' */' '\n'])]; %#ok
-            end
+        if dims.nt(k) > 0
+            code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(sum(dims.lb+dims.ub+dims.np)) '; i++) { ' ...
+                                   names.r '[i] += ' names.tau '*' names.c '[i];' ...                                     
+                                   ' }' '\n'])];
         end
         code = [code, sprintf([options.indent.code options.indent.generic names.r '[' num2str(sum(dims.lb+dims.ub+dims.np)) '] = -' names.tau '; /* Compute ' names.r '_N */' '\n'])];
     end
