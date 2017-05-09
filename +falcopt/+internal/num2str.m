@@ -69,7 +69,7 @@ function s = num2str(varargin)
         end
         s = sprintf(['%0.' num2str(d) 'g'], num);
         if isempty(strfind(s, '.'))
-            pieces = split(s, 'e');
+            pieces = strsplit(s, 'e');
             if length(pieces) == 1
                 s = [pieces{1} '.0'];
             else
