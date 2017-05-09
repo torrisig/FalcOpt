@@ -8,7 +8,6 @@
 % N     - Prediction horizon
 % nx    - Number of states
 % nu    - Number of inputs
-% nc    - Number of constraints (per stage)
 % Q     - Weight matrix for states (cost)
 % P     - Weight matrix for terminal states (cost)
 % R     - Weight matrix for inputs (cost)
@@ -411,7 +410,7 @@ else
         error('external_jacobian_x option must be provided');
     elseif isempty(o.external_jacobian_u)
         error('external_jacobian_u option must be provided');
-    elseif isempty(o.external_jacobian_n)
+    elseif isempty(o.external_jacobian_n)&&o.nn{1}>0
         error('external_jacobian_n option must be provided');
     end
     if( o.nw > 0)
@@ -1261,12 +1260,14 @@ if ~isempty(o.gendir)
     if exist(file_folder, 'dir')~=7
         mkdir(file_folder);
     end
+    filename = [file_folder '/' o.name '.c'];
 else
     file_folder = '';
+    filename = [o.name '.c'];
 end
 
 
-filename = [file_folder '/' o.name '.c'];
+%filename = [file_folder '/' o.name '.c']; % not working with empty o.gendir
 ext_file = [];
 for k = 1:length(info.src)
     ext_file = [ext_file, ' ', info.src{k}];
@@ -1526,10 +1527,16 @@ if ~isempty(o.gendir)
         o.gendir = o.gendir(1:end-1);
     end
     file_folder = o.gendir;
-    if exist(file_folder, 'dir')~=7
+    try
+        cd (sprintf(o.gendir));
+    catch
         mkdir(file_folder);
+        cd (sprintf(o.gendir));
     end
-    cd (sprintf(o.gendir));
+%     if exist(file_folder, 'dir')~=7
+%         mkdir(file_folder);
+%     end
+%     cd (sprintf(o.gendir));
     C.generate( ) ;
     cd ..;
     src = { sprintf([o.gendir '/%s.c'],fileName)};
@@ -1549,9 +1556,9 @@ data = [];
 info.y = [];
 info.in_F = [];
 info.in_G = [];
-x = sym('x',[o.nx,1]);
-u = sym('u',[o.nu,1]);
-w = sym('w',[o.nw,1]);
+x = sym('x',[o.nx,1],'real');
+u = sym('u',[o.nu,1],'real');
+w = sym('w',[o.nw,1],'real');
 
 
 if( nargin(f) == 3)
@@ -1571,9 +1578,9 @@ end
 
 code = [ code, sprintf('/*Dynamics of the system*/\n')];
 if( o.nw > 0)
-    code = [code, sprintf(['void ' fName '(const double* x, const double* u, const double* w, double* xp){\n\n'])];
+    code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
 else
-    code = [code, sprintf(['void ' fName '(const double* x, const double* u, double* xp){\n\n'])];
+    code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
 end
 code = [ code, d, sprintf('}\n\n')];
 info.y.flops = in_y.flops;
@@ -1629,22 +1636,32 @@ u = sym('u',[o.nu,1]);
 w = sym('w',[o.nw,1]);
 
 if( o.nw>0)
-    y = o.dynamics(x,u,w);
-    jac_u = o.external_jacobian_u(x,u,w);
-    jac_x = o.external_jacobian_x(x,u,w);
+    try
+        y = o.dynamics(x,u,w);
+        jac_u = o.external_jacobian_u(x,u,w);
+        jac_x = o.external_jacobian_x(x,u,w);
+    catch
+        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+    end
 else
-    y = o.dynamics(x,u);
-    jac_u = o.external_jacobian_u(x,u);
-    jac_x = o.external_jacobian_x(x,u);
+    try
+        y = o.dynamics(x,u);
+        jac_u = o.external_jacobian_u(x,u);
+        jac_x = o.external_jacobian_x(x,u);
+    catch
+        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+    end
 end
 
 % dynamics of system
 [d, in_y] = falcopt.fcn2struct( y,o,'name','xp');
 code = [ code, sprintf('/*Dynamics of the system*/\n')];
 if( o.nw > 0)
-    code = [code, sprintf(['void model_mpc(const double* x, const double* u, const double* w, double* xp){\n\n'])];
+    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
 else
-    code = [code, sprintf(['void model_mpc(const double* x, const double* u, double* xp){\n\n'])];
+    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
 end
 code = [ code, d, sprintf('}\n\n')];
 info.y.flops = in_y.flops;
