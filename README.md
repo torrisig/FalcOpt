@@ -15,7 +15,7 @@ where the index _j_ spans the predicted horizon state _x_ and input _u_ in the h
 
 ## Installation
 
-Add the folder containing +FalcOpt to your Matlab path. 
+Add the folder containing +FalcOpt to your Matlab path without subfolders. 
 
 ## Setting the problem
 
