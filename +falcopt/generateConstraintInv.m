@@ -154,17 +154,17 @@ function [code, info] = generateConstraintInv(varargin)
     % Extract input and constraint dimension
     for k=1:options.N
         if ~isempty(dp{k})
-            if ~isempty(dp{k})
-                dims.nu(k) = size(dp{k},1); % Number of inputs of stage k
-                dims.np(k) = size(dp{k},2); % Number of non-linear constraint (constraints of p) of stage k
-            else
-                dims.nu(k) = size(dt{k},1);
-                dims.np(k) = 0;
-            end
-        else
+            dims.nu(k) = size(dp{k},1); % Number of inputs of stage k
+        elseif ~isempty(dt{k})
             dims.nu(k) = size(dt{k},1);
-            dims.np(k) = 0;
+        elseif isfield(options, 'bounds') && isfield(options.bounds, 'lb') && ~isempty(options.bounds.lb)
+            dims.nu(k) = size(options.bounds.lb,1);
+        elseif isfield(options, 'bounds') && isfield(options.bounds, 'ub') && ~isempty(options.bounds.ub)
+            dims.nu(k) = size(options.bounds.ub,1);
+        else
+            throw(MException('falcopt:generateConstraintInv:InvalidInput', ['No constraints specified.']));
         end
+        dims.np(k) = size(dp{k},2); % Number of non-linear constraint (constraints of p) of stage k
         dims.nt(k) = size(dt{k},2);
         if isempty(dt{k})
             dt{k} = zeros(dims.nu(k),0);
