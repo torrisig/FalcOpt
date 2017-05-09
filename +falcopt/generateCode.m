@@ -3198,7 +3198,7 @@ elseif o.forceGradient
         ter_struct = repmat([],1,o.N); % Activate when ready
 end
 
-[c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'types', o.real,'precision', o.precision, ...
+[c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.box_lowerBound), 'ub', ~isinf(o.box_upperBound)),  'types', o.real,'precision', o.precision, ...
     'indent', o.indent, 'inline', o.inline, 'verbose', max(0,o.verbose-1), 'test', o.test);
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
