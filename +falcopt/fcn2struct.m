@@ -109,7 +109,16 @@ function [data, info] = fcn2struct(varargin)
 
     fun = @replaceEsp; % initialize function called by regexprep (to substitute 'pow')
     
+    
+    
     % substitute 'pow' in subexpression where possible and save  subexpressions to data
+    if length(subr)>0
+        data = [data, sprintf(['\t' o.real ' '])];
+        for i = 1:length(subr)-1
+            data = [ data, sprintf('s%i,',i)];
+        end
+        data = [ data, sprintf('s%i;\n\n',length(subr))];
+    end
     for i = 1:length(subr)
         tmp_c = ccode(subr{i});
         tmp = strrep(tmp_c, 't0 = ','');
@@ -122,7 +131,7 @@ function [data, info] = fcn2struct(varargin)
         tmp = regexprep(tmp,'(\d+\.\d+E[\-\+]*\d+|\d+\.\d+\d|\d\.\d)','${fun_2($1)}');
        
         % save into data
-        data = [ data, sprintf(['\t' o.real ' s%i = %s\n'],i,tmp)];
+        data = [ data, sprintf(['\ts%i = %s\n'],i,tmp)];
     end
     
     % subs. 'pow' in values where possible and save to data
