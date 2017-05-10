@@ -1,5 +1,5 @@
 <p align="center"><img src="https://raw.githubusercontent.com/torrisig/FalcOpt/master/logo/logo.png"  width="350"  /></p>
- test
+
 # Solving efficient nonlinear Model Predictive Control problems with FalcOpt
 
 **FalcOpt stands for First-order Algorithm via Linearization of Constraints for OPTimization. It allows the user to solve nonlinear Model Predictive Control problems via a novel first-order algorithm presented in [[1](https://arxiv.org/abs/1610.06834)]. This tool works in Matlab and it allows one to automatically generate the C code to solve a custom-made control problem, together with the MEX interface. It heavily exploits sparsity of the problem and it is specifically indicated for time-critical applications.**
