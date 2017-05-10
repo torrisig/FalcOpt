@@ -86,14 +86,12 @@ function [data, info] = fcn2struct(varargin)
                     values = [ values; M(i,j)];
                     indeces = [indeces, ind];
                     S(i,j) = ind;
-                %elseif( ~any(has(values,M(i,j))) )||(~isequal(p.Results.structure,'unique'))
                 elseif( ~any(find(values==M(i,j))) )||(~isequal(p.Results.structure,'unique'))
                     values = [ values; M(i,j)];
                     ind = ind +1;
                     indeces = [indeces, ind];
                     S(i,j) = ind;
                 else
-                    %S(i,j) = indeces(find(has(values,M(i,j))== 1));
                     S(i,j) = indeces(find(values==M(i,j)));
                 end
                 rows = [ rows; i];
