@@ -1282,9 +1282,11 @@ ext_file = [];
 for k = 1:length(info.src)
     ext_file = [ext_file, ' ', info.src{k}];
 end
-if any(contains(info.src,'external_functions.c'))&&~any(contains(info.header,'external_functions.h'))
-    % avoid to compile twice external_functions.c
-    ext_file = [];
+if strcmp(o.gradients,'ccode')
+    if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
+        % avoid to compile twice external_functions.c
+        ext_file = [];
+    end
 end
 f = fopen(filename, 'w+');
 fprintf(f, final_code);
@@ -1890,7 +1892,7 @@ end
 if( nl_con)
     switch grad
         case 'casadi' % use casadi generation
-        
+        import casadi.*
         %     % build_Dg
         %     Dg = jacobian( g, z);
         %     Dg = transpose(Dg);
@@ -2062,7 +2064,7 @@ end
 if( ~o.forceGradient)
     if( isequal(o.gradients,'casadi'))
         % build_tbi
-        
+        import casadi.*
         %sl = SX.sym('sl',o.nu);
         sl = SX.sym('sl',size(Dg,2));
         tbi = transpose(Dg)*Dg + diag(sl)*diag(sl);
