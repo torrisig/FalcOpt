@@ -8,7 +8,6 @@
 % N     - Prediction horizon
 % nx    - Number of states
 % nu    - Number of inputs
-% nc    - Number of constraints (per stage)
 % Q     - Weight matrix for states (cost)
 % P     - Weight matrix for terminal states (cost)
 % R     - Weight matrix for inputs (cost)
@@ -56,8 +55,11 @@
 %   Jac_u_struct       - Matrix containing the structure of the derivative
 %                         of 'dynamics' wrt to u (only for 'gradients' =
 %                         'ccode')
-%   Jac_g_struct       - Matrix containing the structure of the derivative
+%   Jac_n_struct       - Matrix containing the structure of the derivative
 %                         of 'constraints_handle' wrt to u (only for 
+%                         'gradients' = 'ccode')
+%   K_n                - Cell containing the vectors of the different stages 
+%                         on which the nonlinear constraints apply (only for
 %                         'gradients' = 'ccode')
 %
 % Tolerance and max iteration settings 
@@ -146,9 +148,9 @@ p.addParameter('Jac_x_static',false,@islogical);
 p.addParameter('Jac_u_static',false,@islogical);
 p.addParameter('Jac_x_struct',Inf,@isnumeric);
 p.addParameter('Jac_u_struct',Inf,@isnumeric);
-p.addParameter('Jac_g_struct',Inf,@isnumeric);
 p.addParameter('Jac_m_struct',Inf,@isnumeric);
 p.addParameter('Jac_n_struct',[],@isnumeric);
+p.addParameter('K_n',{},@iscell);
 p.addParameter('merit_function', 2, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
 p.addParameter('contractive', false, @islogical);
 p.addParameter('terminal', false, @islogical);
@@ -350,12 +352,13 @@ elseif min(size(o.external_jacobian_n)== [1,1])&& isequal(o.gradients,'manual')
     o.K_n = {1:o.N};
 end
 
-if  ~isempty(o.constraints_handle)
-    if ~isfield(o,'K_n')
+if ~isequal(o.gradients,'ccode')
+    if ~isempty(o.constraints_handle)&&~isempty(o.K_n)
         o.K_n = detect_different_NLconstraints(o);
     end
-else
-    o.K_n = [];
+    if isempty(o.constraints_handle)
+        o.K_n = [];
+    end
 end
 
 % check dims of the function handles
@@ -372,7 +375,7 @@ elseif min(size(o.nn) == [1,1])
 end
 
 % check dims of the function handles
-if ~isempty(o.K_n)
+if ~isempty(o.K_n)&&~strcmp(o.gradients, 'ccode')
     for ii = 1:o.N
         test_u1 = ones(1,o.nu);
         test_f1 = o.constraints_handle{ii}(test_u1);
@@ -411,7 +414,7 @@ else
         error('external_jacobian_x option must be provided');
     elseif isempty(o.external_jacobian_u)
         error('external_jacobian_u option must be provided');
-    elseif isempty(o.external_jacobian_n)
+    elseif isempty(o.external_jacobian_n)&&o.nn{1}>0
         error('external_jacobian_n option must be provided');
     end
     if( o.nw > 0)
@@ -447,7 +450,7 @@ switch o.gradients
         if(any(cellfun(@isempty,a)))
             error('Check the CasaDi version or install it. Program tested with CasaDi v3.1.1')
         end
-    case 'matlab'
+    case {'matlab','manual'}
         v = ver('symbolic');
         if( isempty(v))
             error('Symbolic Math Toolbox not installed. Install it to continue')
@@ -504,8 +507,8 @@ alpha2_eps2 = alpha2_eps*o.eps;
 info.flops.it = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
 info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
 info.flops.once = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
-info.src = [];
-info.header = [];
+info.src = {};
+info.header = {};
 
 %% Generating code
 libr = sprintf(['#include "math.h"' '\n']);
@@ -605,7 +608,7 @@ switch o.gradients
                 else
                     libr = [libr, sprintf('#include "external_functions.h" \n')];
                 end
-                info.header = [info.header; {'external_function.h'}];
+                info.header = [info.header; {'external_functions.h'}];
             else
                 if ~isempty(o.gendir)
                     libr = [libr, sprintf('#include "../external_functions.c" \n')];
@@ -680,6 +683,11 @@ switch o.gradients
     % find the structure of the current Jac_n
     o.Jac_n_struct_hor = cell(1,o.N);
     
+    if isequal(o.gradients,'ccode')
+        o.Jac_n_struct_hor = o.Jac_n_struct;
+    
+    else
+    
     for ii= 1:o.N
         flag_exit = false;
         for jj=1:length(o.K_n)
@@ -694,6 +702,7 @@ switch o.gradients
                 break;
             end
         end
+    end
     end
 
 
@@ -1261,15 +1270,21 @@ if ~isempty(o.gendir)
     if exist(file_folder, 'dir')~=7
         mkdir(file_folder);
     end
+    filename = [file_folder '/' o.name '.c'];
 else
     file_folder = '';
+    filename = [o.name '.c'];
 end
 
 
-filename = [file_folder '/' o.name '.c'];
+%filename = [file_folder '/' o.name '.c']; % not working with empty o.gendir
 ext_file = [];
 for k = 1:length(info.src)
     ext_file = [ext_file, ' ', info.src{k}];
+end
+if any(contains(info.src,'external_functions.c'))&&~any(contains(info.header,'external_functions.h'))
+    % avoid to compile twice external_functions.c
+    ext_file = [];
 end
 f = fopen(filename, 'w+');
 fprintf(f, final_code);
@@ -1526,10 +1541,16 @@ if ~isempty(o.gendir)
         o.gendir = o.gendir(1:end-1);
     end
     file_folder = o.gendir;
-    if exist(file_folder, 'dir')~=7
+    try
+        cd (sprintf(o.gendir));
+    catch
         mkdir(file_folder);
+        cd (sprintf(o.gendir));
     end
-    cd (sprintf(o.gendir));
+%     if exist(file_folder, 'dir')~=7
+%         mkdir(file_folder);
+%     end
+%     cd (sprintf(o.gendir));
     C.generate( ) ;
     cd ..;
     src = { sprintf([o.gendir '/%s.c'],fileName)};
@@ -1549,9 +1570,9 @@ data = [];
 info.y = [];
 info.in_F = [];
 info.in_G = [];
-x = sym('x',[o.nx,1]);
-u = sym('u',[o.nu,1]);
-w = sym('w',[o.nw,1]);
+x = sym('x',[o.nx,1],'real');
+u = sym('u',[o.nu,1],'real');
+w = sym('w',[o.nw,1],'real');
 
 
 if( nargin(f) == 3)
@@ -1571,9 +1592,9 @@ end
 
 code = [ code, sprintf('/*Dynamics of the system*/\n')];
 if( o.nw > 0)
-    code = [code, sprintf(['void ' fName '(const double* x, const double* u, const double* w, double* xp){\n\n'])];
+    code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
 else
-    code = [code, sprintf(['void ' fName '(const double* x, const double* u, double* xp){\n\n'])];
+    code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
 end
 code = [ code, d, sprintf('}\n\n')];
 info.y.flops = in_y.flops;
@@ -1629,22 +1650,32 @@ u = sym('u',[o.nu,1]);
 w = sym('w',[o.nw,1]);
 
 if( o.nw>0)
-    y = o.dynamics(x,u,w);
-    jac_u = o.external_jacobian_u(x,u,w);
-    jac_x = o.external_jacobian_x(x,u,w);
+    try
+        y = o.dynamics(x,u,w);
+        jac_u = o.external_jacobian_u(x,u,w);
+        jac_x = o.external_jacobian_x(x,u,w);
+    catch
+        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+    end
 else
-    y = o.dynamics(x,u);
-    jac_u = o.external_jacobian_u(x,u);
-    jac_x = o.external_jacobian_x(x,u);
+    try
+        y = o.dynamics(x,u);
+        jac_u = o.external_jacobian_u(x,u);
+        jac_x = o.external_jacobian_x(x,u);
+    catch
+        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+    end
 end
 
 % dynamics of system
 [d, in_y] = falcopt.fcn2struct( y,o,'name','xp');
 code = [ code, sprintf('/*Dynamics of the system*/\n')];
 if( o.nw > 0)
-    code = [code, sprintf(['void model_mpc(const double* x, const double* u, const double* w, double* xp){\n\n'])];
+    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
 else
-    code = [code, sprintf(['void model_mpc(const double* x, const double* u, double* xp){\n\n'])];
+    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
 end
 code = [ code, d, sprintf('}\n\n')];
 info.y.flops = in_y.flops;
@@ -1693,9 +1724,9 @@ info.in_n = {};
 info.in_Dn_n = {};
 sxfcn = {};
 
-if ( strcmp(o.gradients,'casadi'))
-    import casadi.*
-end
+% if ( strcmp(o.gradients,'casadi'))
+%     import casadi.*
+% end
 
 % check if there are box constraints
 % if( isempty(o.box_constraints))
@@ -1720,6 +1751,7 @@ end
 % build nonlinear constraints n(u)
 switch grad
     case 'casadi'
+        import casadi.*
         z = SX.sym('u',[o.nu,1]);
     case {'matlab','manual'}
         z = sym('u',[o.nu,1],'real');

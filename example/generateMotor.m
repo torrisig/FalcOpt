@@ -8,7 +8,7 @@ debug = 2;                  % level of debug
 ref = true;                 % to track a desired time-varying reference
 contractive = false;        % no constractive constraints
 terminal = false;           % no terminal constraints
-gradients = 'matlab';
+gradients = 'casadi';
 real = 'double';
 
 %% Dynamics of the system
@@ -47,14 +47,15 @@ switch gradients
         
         % fourth option: write C code that evaluates the model and the
         % jacobians and their structure (only for experienced users)
-        [jac_x_struct,jac_u_struct,jac_n_struct] = jacobian_structure();   % function returning structure of jacobians
+        [jac_x_struct,jac_u_struct,jac_n_struct, K_n] = jacobian_structure(par);   % function returning structure of jacobians
         
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
             'nn',par.nn,'contractive',contractive, 'terminal', terminal, 'gradients', gradients, ...
             'debug',debug,'merit_function', merit_function, 'stepSize', stepSize,...
             'trackReference',ref,'eps',eps,'precision', real,...
             'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
-            'jac_x_struct',jac_x_struct,'jac_u_struct',jac_u_struct,'jac_n_struct',jac_n_struct,...
+            'jac_x_struct',jac_x_struct,'jac_u_struct',jac_u_struct,...
+            'jac_n_struct', jac_n_struct, 'K_n', K_n,...
             'name', 'Motor_example_FalcOpt', 'gendir', 'FalcOpt');
 end
 end
