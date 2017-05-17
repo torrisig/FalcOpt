@@ -85,7 +85,7 @@
 %   debug              - Level of debug (number of inputs/outputs of
 %                         generated functions). Default: 1
 %   indent             - Indentation to be used in code generation.
-%                         Default: struct('code', '', 'data', '', 'generic', '\t' ) 
+%                         Default: struct('code', '', 'data', '', 'generic', '\t' )
 %   inline             - Inline keyword to be used. Default: 'inline'
 %
 % Outputs:
@@ -1001,7 +1001,7 @@ if o.merit_function == 0
     optCode = [optCode, sprintf([...
         o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
-       
+    
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
@@ -1859,7 +1859,7 @@ else
     info.nc = [info.nc 0];
 end
 
-for i=1:o.N 
+for i=1:o.N
     lb = sum(~isinf(o.box_lowerBound(:,i)));
     ub = sum(~isinf(o.box_upperBound(:,i)));
     info.nc(i) = info.nc(i)+lb+ub;
@@ -1870,7 +1870,7 @@ if( nl_con)
     switch grad
         case 'casadi' % use casadi generation
             import casadi.*
-
+            
             sxfcn = {};
             
             in_n = cell(length(o.K_n));
@@ -1882,9 +1882,9 @@ if( nl_con)
                 for jj=1:length(o.K_n)
                     
                     % build_n
-                    [~,in_n{jj}] = falcopt.casadi2struct( n{jj}); 
+                    [~,in_n{jj}] = falcopt.casadi2struct( n{jj});
                     
-                    y_f{jj} = Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values}); 
+                    y_f{jj} = Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values});
                     
                     sxfcn{end + 1} = y_f{jj}; %#ok
                     try
@@ -1904,8 +1904,8 @@ if( nl_con)
                         o.indent.generic  'build_n_%d_casadi( in, &n, &iw, w, mem);' o.indent.generic '/* external casadi generated function */\n}\n\n'],jj) ]; %#ok
                     
                     % build_Dn
-                    Dn{jj} = jacobian( n{jj}, z); 
-                    Dn{jj} = transpose(Dn{jj}); 
+                    Dn{jj} = jacobian( n{jj}, z);
+                    Dn{jj} = transpose(Dn{jj});
                     [info.in_Dn_n{jj}.static,i] = falcopt.casadi2struct(Dn{jj});
                     
                     if( info.in_Dn_n{jj}.static) %is jac matrix constant ?
@@ -1927,7 +1927,7 @@ if( nl_con)
                         code = [code, sprintf(['void build_Dn_%d( const ' o.real '* u, ' o.real '* Dn_fun){' '\n\n'],jj)]; %#ok
                         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
                         code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
-                        code = [code, sprintf(['\tin[0] = u;\n\n' ... 
+                        code = [code, sprintf(['\tin[0] = u;\n\n' ...
                             o.indent.generic  'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);' o.indent.generic '/* external casadi generated function*/\n}\n\n'],jj) ]; %#ok
                         info.in_Dn_n{jj}.struct.structure = i;
                         try
@@ -1944,11 +1944,11 @@ if( nl_con)
         case {'manual','matlab'} % use matlab jacobian generation
             
             for jj=1:length(o.K_n)
-                                
+                
                 in_n = cell(length(o.K_n));
                 Dn = cell(length(o.K_n));
-            
-                [c, in_n{jj}] = falcopt.fcn2struct( n{jj},o,'name', 'n' ); 
+                
+                [c, in_n{jj}] = falcopt.fcn2struct( n{jj},o,'name', 'n' );
                 code = [code, sprintf('/* Constraints evaluation*/ \n')]; %#ok
                 code = [code, sprintf(['void build_n_' num2str(jj) '( const ' o.real '* u,'  o.real '* n){' '\n'])]; %#ok
                 code = [code, c, sprintf('}\n\n')]; %#ok
@@ -2895,7 +2895,7 @@ if ~isempty(o.K_ub)
             o.indent.generic o.indent.generic 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
-    code = [code, sprintf(['}' '\n'])]; 
+    code = [code, sprintf(['}' '\n'])];
 end
 
 % nonlinear constraints
@@ -2987,7 +2987,7 @@ if ~isempty(o.K_lb)
             o.indent.generic o.indent.generic 'minus_Ina_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
-    code = [code, sprintf(['}' '\n'])]; 
+    code = [code, sprintf(['}' '\n'])];
 end
 
 %upper bounds
@@ -3070,7 +3070,7 @@ for jj=1:length(o.K_nc)
         'names', struct('fun', ['minus_scale_nc_' num2str(jj)], 'M', {{'m_alpha'}},...
         'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'static', true,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-
+    
     code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
@@ -3102,7 +3102,7 @@ if ~isempty(o.K_nc)
     code = [code, sprintf(['}' '\n'])];
 end
 
-ter_struct = repmat([],1,o.N); 
+ter_struct = repmat([],1,o.N);
 
 [c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.box_lowerBound), 'ub', ~isinf(o.box_upperBound)),  'types', o.real,'precision', o.precision, ...
     'indent', o.indent, 'inline', o.inline, 'verbose', max(0,o.verbose-1), 'test', o.test);
