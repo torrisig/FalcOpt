@@ -2,7 +2,7 @@
 %
 % [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R,...);
 % or
-% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R,, 'par1', val1, 'par2', val2, ...) [with options]
+% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R, 'par1', val1, 'par2', val2, ...) [with options]
 %
 % where required inputs are:
 % N     - Prediction horizon
@@ -151,7 +151,7 @@ p.addParameter('Jac_u_struct',Inf,@isnumeric);
 p.addParameter('Jac_m_struct',Inf,@isnumeric);
 p.addParameter('Jac_n_struct',[],@isnumeric);
 p.addParameter('K_n',{},@iscell);
-p.addParameter('merit_function', 2, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
+p.addParameter('merit_function', 0, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
 p.addParameter('contractive', false, @islogical);
 p.addParameter('terminal', false, @islogical);
 p.addParameter('forceGradient',true,@islogical); % This parameter is to be deleted when converter example works without build_tbi()
@@ -733,6 +733,7 @@ o.K_nc = detect_structure_constraints( o.nc,o );
 c_w_dec = argument_w(o,true);
 c_tr_dec = argument_def(o,true);
 c_contr_dec = argument_contr_value(o,true);
+ optCode = [optCode, sprintf(['/* main function of the algorithm */' '\n'])];
 if o.debug > 1
     optCode = [optCode, sprintf(['int proposed_algorithm(const ' o.real '* x0, ' o.real '* u' c_w_dec c_tr_dec c_contr_dec ...
         ', ' o.real '* x, ' o.real '* fval, unsigned int* iter, unsigned int* iter_ls){' '\n' '\n'])];
@@ -789,6 +790,7 @@ optCode = [optCode, sprintf(['\t\t' 'du_sqr = 0.0, u_sqr = 0.0;' '\n' '\n'])];
 % this function generates det_x
 code = [code, c];
 data = [data, d];
+optCode = [optCode, sprintf(['/* Initialization of the predicted state x (dimension: N*nx) */' '\n'])];
 if o.nw >0
     optCode = [optCode, sprintf(['\t' 'det_x(x0,u,w,x);' '\n'])];
 else
@@ -809,6 +811,13 @@ c_psi_dot_use = argument_def_internal_psi_dot(o,false);
 c_contr_use = argument_contr_value(o,false);
 
 if (o.contractive || o.terminal)
+        if o.terminal
+            optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+                'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
+        elseif o.contractive
+            optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+                'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
+        end
     optCode = [optCode, sprintf(['\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
 
@@ -833,20 +842,29 @@ code = [code, c];
 data = [data, d];
 info.flops.once = falcopt.internal.addFlops(info.flops.once, in.flops);
 
+optCode = [optCode, sprintf(['\n' '\t' '/* This function initializes the slack variables sl, its squares sl_sqr ' '\n'...
+    'and the function gps = g + 0.5 * diag(sl_sqr) */' '\n'])];
 optCode = [optCode, sprintf(['\t' 'initialize_slack(u' c_psi_use c_contr_use ', sl, sl_sqr, gps' ');' '\n\n'])];
 
-
-
-
-
 %% here we loop over the iterations it
+
+optCode = [optCode, sprintf(['\n' '\t' '/* Outer loop over the iterates it. The break command interrups the cycle \n'...
+    '\t' 'if convergence or error is encountered before termination */' '\n'])];
 
 optCode = [optCode, sprintf(['\t' 'for (it=0; it < %i; it++) {' '\n'], o.maxIt)];
 
 if (o.contractive || o.terminal)
+    if o.terminal
+            optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+                'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
+        elseif o.contractive
+            optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+                'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
+    end
     optCode = [optCode, sprintf(['\t\t' 'if (it > 0) {' '\n'...
         '\t\t\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use '); }' '\n\n'])];
 else
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J and its derivative dot_J */' '\n'])];
     optCode = [optCode, sprintf(['\t\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
 
@@ -870,6 +888,8 @@ code = [code, c];
 data = [data, d];
 info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 
+optCode = [optCode, sprintf(['\n' '\t\t' '/* Compute the gradient step, projected onto the linearization of the constraints \n' ...
+    'du: primal variable gradient steps, dsl: slack variables, muG: dual variables */' '\n'])];
 optCode = [optCode, sprintf(['\t\t' 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
     
 % optCode = [optCode, sprintf(['if (it==2) {\n copy_Nnu(u,muG+30); return;}; \n'])]; % DEBUG
@@ -898,21 +918,25 @@ if o.merit_function == 0
     % generate diff_Nnc
     code = [code, c];
     data = [data, d];
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* dm = muG - mu; */' '\n'])];
     optCode = [optCode, sprintf(['\t\t' 'diff_Nnc(dm,muG,mu);' '\n\n'])];
     info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
     
+    % generate function that computes the merit function
     [c, d, in] = generate_det_phi(o);
     code = [code, c];
     data = [data, d];
     info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops); % inside condition
     
+    % generate function that computes the derivative of the merit function
     [c, d, in] = generate_det_dot_phi(o);
     code = [code, c];
     data = [data, d];
     info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
     info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops); % inside condition
     
+    % generate the condition to update the penalty parameter rho
     [c, d, in] = generate_conditions_rho(o);
     code = [code, c];
     data = [data, d];
@@ -920,6 +944,8 @@ if o.merit_function == 0
     
 else
     
+    % generate function that computes the merit function and its
+    % directional derivative (non-smooth penalty function)
     [c,d,in] = generate_Lagrangian_oracles_lp(o);
     % generate det_dot_phi, det_phi, condition_rho
     code = [code, c];
@@ -932,16 +958,18 @@ end
 
 if o.merit_function == 0
     
-    
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* compute the directional derivative of the merit function, phi0_dot */' '\n'])];
     optCode = [optCode, sprintf(['\t\t' 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
     
-    
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* Check the penalty parameter rho via phi0_dot */' '\n'])];
     optCode = [optCode, sprintf(['\t\t' 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr,alpha)==0){' '\n',...
         '\t\t\t' 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
         '\t\t\t' 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
+    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Update the penalty parameter rho */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t' 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t' 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t' 'flag_ini = 1;' '\n'])];
+    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Recompute phi0_dot */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t' 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
     optCode = [optCode, sprintf(['\t\t' '}' '\n'])];
     
@@ -958,6 +986,8 @@ if o.merit_function == 0
     
 else
     
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* Update the penalty parameter rho \n' ...
+            '\t\t\t\t' 'and compute merit function phi0 and its derivative phi0_dot */' '\n\n'])];
     optCode = [optCode, sprintf(['\t\t' 'update_rho(muG, &rho, &rho_hat);' '\n',...
         '\t\t' 'det_phi (J, gps, rho, &phi0);' '\n',...
         '\t\t' 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n'])];
@@ -989,19 +1019,25 @@ if o.merit_function == 0
         info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops); % Used twice
     end
     
+    % generate the function that computes the next merit function step
+    % size t based on a safeguarded quadratic interpolation
     [c,d,in] = generate_quadratic_interpolation(o);
     
     code = [code, c, sprintf('\n\n')];
     data = [data, d];
     info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
-    
+    % update u and slp
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* slp = sl + t*dsl; */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
         '\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
+        optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* mup = mu + t*dm; */' '\n'])];
         optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx) using the new predicted input up (dim. N*nu) */' '\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
             '\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
@@ -1012,7 +1048,8 @@ if o.merit_function == 0
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp ' '\n'...
+        '\n' '\t\t\t\t' 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
@@ -1021,26 +1058,32 @@ if o.merit_function == 0
     
 %     optCode = [optCode, sprintf(['if (it==1) {copy_Nnu(u,gpsp + 30); \n return;}; \n'])]; % DEBUG
 
-    
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' '\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
         '\t\t\t\t\t' 'break;' '\n',...
+        '\t\t\t\t' '}' '\n',...
         '\t\t\t\t' 'else {' '\n',...
         '\t\t\t\t\t' 't_u = t;' '\n',...
+        '\n' '\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
         '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t' '}' '\n',...
         '\t\t\t' '}' '\n',...
+        '\n' '\t\t\t' '/* if t gets too small, output an error */' '\n',...
         '\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
         '\t\t\t\t' 'cond_err = 0;' '\n',...
         '\t\t' '}' '\n',...
-        '\t\t' 'else' '\n',...
-        '\t\t\t' 'conditions_f = 0;' '\n\n'])];
+        '\t\t' 'else {' '\n',...
+        '\n' '\t\t\t' '/* phi0_dot is sufficiently small and we have converged */' '\n' ...
+        '\t\t\t' 'conditions_f = 0;' '\n' ...
+        '\t\t' '}' '\n\n'])];
     info.flops.ls.comp = info.flops.ls.comp +1;
     info.flops.ls.mul = info.flops.ls.mul +2;
     info.flops.it.comp = info.flops.it.comp +1;
@@ -1048,6 +1091,7 @@ if o.merit_function == 0
 else
     %% recompute rho
     
+    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Check conditions on phi0_dot for convergence and start line-search */' '\n'])];
     optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
         '\t\t\t' 't = 1.0;' '\n',...
         '\t\t\t' 't_u = 1.0;' '\n',...
@@ -1075,13 +1119,19 @@ else
     data = [data, d];
     info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
+    % update u and slp
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* slp = sl + t*dsl; */' '\n\n'])];
     
     optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
         '\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
+        optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* mup = mu + t*dm; */' '\n\n'])];
         optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx)' '\n'...
+        '\n' '\t\t\t\t' 'using the new predicted input up (dim. N*nu) */' '\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
             '\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
@@ -1092,34 +1142,42 @@ else
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp' '\n'...
+        '\n' '\t\t\t\t' 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
         '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
-    
+
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' '\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
         '\t\t\t\t\t' 'break;' '\n',...
+        '\t\t\t\t' '}' '\n',...
         '\t\t\t\t' 'else {' '\n',...
+        '\n' '\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
         '\t\t\t\t\t' 't_u = t;' '\n',...
         '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t' '}' '\n',...
+        '\n' '\t\t\t\t' '/* if t gets too small, try resetting rho */' '\n',...
         '\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n'...
         '\t\t\t\t\t' 'reset_rho = 1;' '\n'...
-        '\t\t\t' '}' '\n'])];
+        '\t\t\t\t' '}' '\n'])];
     
     optCode = [optCode, sprintf([...
         '\t\t\t' '/* Reset rho to rho_hat if rho is overly big */' '\n'...
         '\t\t\t' 'if (reset_rho == 1){' '\n'...
         '\t\t\t\t' 'reset_rho = 0;' '\n'...
         '\t\t\t\t' 'rho = rho_hat;' '\n'...
+        '\n' '\t\t\t\t\t' '/* Reset phi0 and phi0_dot */' '\n'...
         '\t\t\t\t' 'det_phi (J, gps, rho, &phi0);' '\n',...
         '\t\t\t\t' 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n',...
         ...
@@ -1128,12 +1186,17 @@ else
         '\t\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
     info.flops.it.comp = info.flops.it.comp +1;
     
+    % update u and slp
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* slp = sl + t*dsl; */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
         '\t\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx)' '\n'...
+        '\t\t\t\t\t\t' 'using the new predicted input up (dim. N*nu) */' '\n\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
             '\t\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
@@ -1144,25 +1207,31 @@ else
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
         '\t\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         '\t\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
     
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
         optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
-    
-    optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot)' '\n',...
+   
+    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' '\t\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
         '\t\t\t\t\t\t' 'break;' '\n',...
+        '\t\t\t\t\t' '}' '\n',...
         '\t\t\t\t\t' 'else {' '\n',...
+        '\n' '\t\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
         '\t\t\t\t\t\t' 't_u = t;' '\n',...
         '\t\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
         '\t\t\t\t\t' '}' '\n',...
+        '\n' '\t\t\t\t\t' '/* if t gets too small, output an error */' '\n',...
         '\t\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
         '\t\t\t\t\t\t' 'cond_err = 0;' '\n',...
         '\t\t\t\t' '}' '\n',...
@@ -1191,6 +1260,7 @@ info.flops.once.add = info.flops.once.add +1;
 
 %% update u, slack and dual variables
 
+optCode = [optCode, sprintf(['\n' '\t\t' '/* update step */' '\n'])];
 if o.merit_function == 0
     optCode = [optCode, sprintf([ '\t\t' 'copy_Nnc(mu,mup);' '\n'])];
 end
@@ -1212,6 +1282,7 @@ info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 code = [code, c, sprintf('\n\n')];
 data = [data, d];
 
+optCode = [optCode, sprintf(['\n' '\t\t' '/* check convergence (update step) */' '\n'])];
 optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
 optCode = [optCode,sprintf(['\t\t\t' 'conditions_x = 1;' '\n',...
     '\t\t' 'else' '\n',...
@@ -1227,6 +1298,7 @@ optCode = [optCode,sprintf(['\t\t\t' 'break;' '\n\n',...
     '\t' '}' '\n\n'])];
 info.flops.it.comp = info.flops.it.comp +3;
 
+optCode = [optCode, sprintf(['\n' '\t' '/* Assign exitflag */' '\n'])];
 optCode = [optCode,sprintf(['\t' '(*iter) = it+1;' '\n',...
     '\t' 'if (conditions_f == 0)' '\n',...
     '\t\t' 'cond = 2;' '\n',...
@@ -1241,6 +1313,7 @@ optCode = [optCode,sprintf(['\t' '(*iter) = it+1;' '\n',...
     '\t\t' '}' '\n'...
     '\t' '}' '\n\n'])];
 if o.debug > 1
+    optCode = [optCode, sprintf(['\n' '\t\t' '/* Output cost function */' '\n'])];
     optCode = [optCode, sprintf(['\t' '*fval = J;' '\n'])];
 end
 optCode = [optCode, sprintf(['\t' 'return cond;' '\n'])];
@@ -1277,7 +1350,6 @@ else
 end
 
 
-%filename = [file_folder '/' o.name '.c']; % not working with empty o.gendir
 ext_file = [];
 for k = 1:length(info.src)
     ext_file = [ext_file, ' ', info.src{k}];
@@ -1292,11 +1364,6 @@ f = fopen(filename, 'w+');
 fprintf(f, final_code);
 fclose(f);
 
-
-% if ~isempty(o.gendir)
-%     cd ..
-% end
-
 if o.compile
     if o.build_MEX
         compile = ['mex ' filename ext_file ' -v -output ' mexName];
@@ -1306,8 +1373,6 @@ if o.compile
     disp(compile);
     eval(compile);
 end
-
-
 
 end
 
@@ -2119,6 +2184,8 @@ end
 end
 
 function [c] = argument_w(o,declaration)
+% add or not w as an argument of the functions
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real '* ']);
@@ -2135,6 +2202,9 @@ end
 end
 
 function c = argument_contr_value(o,declaration)
+% consider the additional argument for the constant term introduced by the 
+% contractive/terminal constraint
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real ' ']);
@@ -2150,6 +2220,9 @@ end
 end
 
 function [c] = argument_def(o,declaration)
+% consider the additional arguments introduced by the contractive approach
+% (index of the contractive constraint) and possible reference tracking
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real '* ']);
@@ -2170,6 +2243,9 @@ end
 end
 
 function [c] = argument_def_internal_psi(o,declaration)
+% consider the additional argument introduced by the contractive/terminal 
+% approach (variable psi_N)
+% declaration: logic variable, if true it adds const and the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real '* ']);
@@ -2185,6 +2261,9 @@ end
 end
 
 function [c] = argument_def_internal_psi_noconst(o,declaration)
+% consider the additional argument introduced by the contractive/terminal 
+% approach (variable psi_N)
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf([o.real '* ']);
@@ -2200,6 +2279,9 @@ end
 end
 
 function [c] = argument_def_internal_psi_plus(o,declaration)
+% consider the additional argument introduced by the contractive/terminal 
+% approach (variable psi_Np)
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real '* ']);
@@ -2215,6 +2297,9 @@ end
 end
 
 function [c] = argument_def_internal_psi_dot_noconst(o,declaration)
+% consider the additional argument introduced by the contractive/terminal 
+% approach (variable dot_psi_N)
+% declaration: logic variable, if true it adds the type of variable
 
 if declaration
     str_real = sprintf([o.real '* ']);
@@ -2230,6 +2315,9 @@ end
 end
 
 function [c] = argument_def_internal_psi_dot(o,declaration)
+% consider the additional argument introduced by the contractive/terminal 
+% approach (variable dot_psi_N)
+% declaration: logic variable, if true it adds const and the type of variable
 
 if declaration
     str_real = sprintf(['const ' o.real '* ']);
@@ -2246,15 +2334,19 @@ end
 
 
 function [code, data] = generate_forward_simulation(o)
+% function that generates the forward simulation 'det_x'
 
 nx = o.nx;
 nu = o.nu;
 nw = o.nw;
-N = o.N;
+N = o.N; 
+real = o.precision;
 
 code = [];
 data = [];
 
+code = [code, sprintf(['\n' '/* det_x is a forward simulation of model_mpc with initial state x0 \n'...
+    'and sequence of predicted inputs u (of dim. N*nu) */' '\n'])]; 
 if o.nw >0
     code = [code, sprintf([o.inline ' void det_x (const ' o.real '* x0, const ' o.real '* u, const ' o.real '* w, ' o.real '* x){' '\n\n'])];
 else
@@ -2281,6 +2373,8 @@ code = [code, sprintf(['}' '\n'])];
 end
 
 function [code, data, info] = generate_objective_gradient_oracle(o)
+% generate the function that computes the gradient steps, along with
+% auxiliary functions
 
 nx = o.nx;
 nu = o.nu;
@@ -2360,6 +2454,7 @@ end
 
 code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
 
+code = [code, sprintf(['\n' '\t' '/* Compute tmp_x (cost associated to last stage) */' '\n'])]; 
 if trackRef
     code = [code, sprintf(['\t' 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
     code = [code, sprintf(['\t' 'Pmul(Px, dx);' '\n'])];
@@ -2412,6 +2507,7 @@ else
     end
 end
 
+code = [code, sprintf(['\n' '\t' '/* Start computing dot_J from the bottom */' '\n'])]; 
 code = [code, sprintf(['\t' 'product_and_sum_nu(dot_J + %d,Px, Ru, G);' '\n\n'], (N-1)*nu)];
 
 if o.terminal
@@ -2490,6 +2586,7 @@ else
     info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
 end
 
+code = [code, sprintf(['\n' '\t\t' '/* Increment J */' '\n'])]; 
 code = [code, sprintf(['\t\t' '(*J) += .50*(tmp_x + tmp_u);' '\n\n'])];
 info.flop.it.mul = info.flops.it.mul+1*(N-1);
 info.flops.it.add = info.flops.it.add+2*(N-1);
@@ -2517,6 +2614,7 @@ if o.contractive
     
 end
 
+code = [code, sprintf(['\n' '\t\t' '/* Compute dot_J */' '\n'])];
 code = [code, sprintf(['\t\t' 'product_and_sum_nx(mem_tmp2, Px, Qx, F);' '\n',...
     '\t\t' 'copy_nx(Px,mem_tmp2);' '\n',...
     '\t\t' 'product_and_sum_nu(dot_J + ii*%d, Px, Ru, G);' '\n',...
@@ -2633,9 +2731,7 @@ Q = o.Q;
 R = o.R;
 P = o.P;
 
-
-
-
+code = [code, sprintf(['\n' '/* It computes Q*x */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(Q, ...
     'names', struct('fun', 'Qmul', 'M', 'Q', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -2645,6 +2741,7 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
+code = [code, sprintf(['\n' '/* It computes P*x */' '\n'])];
 [d, c] = falcopt.generateMVMult(P, ...
     'names', struct('fun', 'Pmul', 'M', 'P', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 % flops of Pmul are counted together with Qmul
@@ -2655,6 +2752,7 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 
+code = [code, sprintf(['\n' '/* It computes R*u */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(R, ...
     'names', struct('fun', 'Rmul', 'M', 'R', 'v', 'du'), 'types', o.real,...
     'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2665,6 +2763,7 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
+code = [code, sprintf(['\n' '/* dot product x^top *x */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(ones(1,nx), ...
     'names', struct('fun', 'dot_product_nx_nx', 'M', 'R',...
     'v', 'du'), 'static', false, 'types', o.real, 'verbose', o.verbose, 'precision', o.precision, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2675,6 +2774,7 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
+code = [code, sprintf(['\n' '/* dot product u^top *u */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(ones(1,nu), ...
     'names', struct('fun', 'dot_product_nu_nu', 'M', 'R',...
     'v', 'du'), 'static', false, 'types', o.real, 'verbose', o.verbose, 'precision', o.precision, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2685,7 +2785,7 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
-
+code = [code, sprintf(['\n' '/* It computes G^top * x + u (exploiting structure of G) */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({o.Jac_u_struct,eye(nu)}, ...
     'names', struct('fun', 'product_and_sum_nu', 'M', {{'A', 'I'}},...
     'v', {{'u1', 'u2'}}), 'static', [false,true], 'structure', 'ordered', 'transpose', true, 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2707,6 +2807,7 @@ nx = o.nx;
 nu = o.nu;
 
 if o.contractive
+    code = [code, sprintf(['\n' '/* It generates a null vector */' '\n'])];
     code =  [code, sprintf(['void set_zero_nu (' o.real '* x){\n\n'])];
     
     for jj=0:nu-1
@@ -2717,6 +2818,7 @@ if o.contractive
 end
 
 if o.contractive|| o.terminal
+    code = [code, sprintf(['\n' '/* It computes F^top * u (exploiting structure of F) */' '\n'])];
     [~, c, in] = falcopt.generateMVMult({o.Jac_x_struct}, ...
         'names', struct('fun', 'product_contr_nx', 'M', {{'A'}},...
         'v', {{'u'}}), 'static', false, 'structure', 'ordered',...
@@ -2726,6 +2828,7 @@ if o.contractive|| o.terminal
     code = [code, c, sprintf('\n\n')];
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
+    code = [code, sprintf(['\n' '/* It computes G^top * u (exploiting structure of G) */' '\n'])];
     [~, c, in] = falcopt.generateMVMult({o.Jac_u_struct}, ...
         'names', struct('fun', 'product_contr_nu', 'M', {{'A'}},...
         'v', {{'u'}}), 'static', false, 'structure', 'ordered',...
@@ -2737,6 +2840,7 @@ if o.contractive|| o.terminal
     
 end
 
+code = [code, sprintf(['\n' '/* It computes F^top * u1 (exploiting structure of F) + u2 */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({o.Jac_x_struct,eye(nx)}, ...
     'names', struct('fun', 'product_and_sum_nx', 'M', {{'A', 'I'}},...
     'v', {{'u1', 'u2'}}), 'static', [false,true], 'structure', 'ordered', 'transpose', true, 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -2757,6 +2861,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 nx = o.nx;
 nu = o.nu;
 
+code = [code, sprintf(['\n' '/* It computes dx = x - xref */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({eye(nx), -eye(nx)}, ...
     'names', struct('fun', 'diffX', 'M', {{'I', 'mI'}}, 'v', {{'x', 'xref'}}, 'r', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -2766,6 +2871,7 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
+code = [code, sprintf(['\n' '/* It computes du = u - uref */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({eye(nu), -eye(nu)}, ...
     'names', struct('fun', 'diffU', 'M', {{'I', 'mI'}}, 'v', {{'u', 'uref'}}, 'r', 'du'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -2826,6 +2932,8 @@ end
 
 code = [code,  sprintf(['}' '\n\n'])];
 
+code = [code, sprintf(['\n' '/* It initialize the slack variables sl and its squares sl_sqr \n'...
+    'such that, if possible, gps = g + 0.5*sl_sqr = 0 */' '\n'])];
 code = [code, sprintf([o.inline ' void initialize_slack( const ' o.real '* u' c_psi_dec c_contr_dec ', ' o.real '* sl, ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
 if ~isempty(o.K_lb)
@@ -3238,6 +3346,7 @@ code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 % Gradient step function
+code = [code, sprintf(['\n' '/* Gradient step function */' '\n'])];
 code = [code, sprintf([o.inline ' void gradient_step(const ' o.real '* dot_J, const ' o.real '* u, const ' o.real '* sl,' '\n',...
     '\t' 'const ' o.real '* sl_sqr, const ' o.real '* gps' c_psi_dot_dec ', ' o.real '* du, ' o.real '* dsl, ' o.real '* muG){' '\n\n'])];
 
@@ -3469,7 +3578,7 @@ if ~isempty(o.K_n)
 end
 code = [code,  sprintf(['}' '\n\n'])];
 
-
+code = [code, sprintf(['\n' '/* It computes gps = g + 0.5 * sl_sqr */' '\n'])];
 code = [code, sprintf([o.inline ' void build_gpsl(const ' o.real '* u' c_psi_dec ...
     c_contr_dec ', const ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
@@ -3493,9 +3602,6 @@ info.flops.mul = info.flops.mul+ N*3; % mul inside only first cycle % NOT CLEAR,
 
 lb = sum(~isinf(o.box_lowerBound),1);
 ub = sum(~isinf(o.box_upperBound),1);
-
-
-
 
 for k = 1:o.N
     code = [code, sprintf(['\n',...
@@ -3548,6 +3654,7 @@ info.flops.mul = info.flops.mul+ 3*N;
 
 %% build_sqr
 
+code = [code, sprintf(['\n' '/* It computes x_sqr = x.*x */' '\n'])];
 code = [code, sprintf([o.inline ' void build_sqr_Nnc( const ' o.real ' *x, ' o.real ' *x_sqr){' '\n\n'])];
 
 code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
@@ -3566,6 +3673,7 @@ code = [];
 data = [];
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
+code = [code, sprintf(['\n' '/* dot_product of dim N*nu */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(ones(1,o.N*o.nu), ...
     'names', struct('fun', 'dot_product_Nnu', 'M', 'u',...
     'v', 'du'), 'static', false, 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -3581,6 +3689,7 @@ code = [];
 data = [];
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
+code = [code, sprintf(['\n' '/* dot_product of dim N*nc */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(ones(1,sum(o.nc)), ...
     'names', struct('fun', 'dot_product_Nnc', 'M', 'u',...
     'v', 'du'), 'static', false, 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -3602,6 +3711,7 @@ N = o.N;
 code = [];
 data = [];
 
+code = [code, sprintf(['\n' '/* it copies the content of a variable */' '\n'])];
 [d, c] = falcopt.generateMVMult({eye(nx)}, ...
     'names', struct('fun', 'copy_nx', 'M', {{'I'}}, 'v', {{'x'}}, 'r', 'res'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -3610,6 +3720,7 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 
+code = [code, sprintf(['\n' '/* it copies the content of a variable */' '\n'])];
 [d, c] = falcopt.generateMVMult({eye(N*nx)}, ...
     'names', struct('fun', 'copy_Nnx', 'M', {{'I'}}, 'v', {{'x'}}, 'r', 'res'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -3618,6 +3729,7 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 
+code = [code, sprintf(['\n' '/* it copies the content of a variable */' '\n'])];
 [d, c] = falcopt.generateMVMult({eye(sum(o.nc))}, ...
     'names', struct('fun', 'copy_Nnc', 'M', {{'I'}}, 'v', {{'x'}}, 'r', 'res'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -3626,6 +3738,7 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 
+code = [code, sprintf(['\n' '/* it copies the content of a variable */' '\n'])];
 [d, c] = falcopt.generateMVMult({eye(N*nu)}, ...
     'names', struct('fun', 'copy_Nnu', 'M', {{'I'}}, 'v', {{'x'}}, 'r', 'res'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
@@ -3711,6 +3824,7 @@ N = o.N;
 
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
+code = [code, sprintf(['\n' '/* It computes dx = x - xref */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({eye(sum(o.nc)), -eye(sum(o.nc))}, ...
     'names', struct('fun', 'diff_Nnc', 'M', {{'I', 'mI'}},...
     'v', {{'x', 'xref'}}, 'r', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -3734,6 +3848,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 nc = o.nc(1);
 N = o.N;
 
+code = [code, sprintf(['\n' '/* It computes the merit function phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_phi (const ' o.real ' J, const ' o.real '* gps, const ',...
     o.real '* mu, const ' o.real ' rho, ' o.real '* phi){' '\n\n'])];
 
@@ -3760,9 +3875,7 @@ code = [];
 data = [];
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
-nc = o.nc(1);
-N = o.N;
-
+code = [code, sprintf(['\n' '/* It computes the derivative of the merit function dot_phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_dot_phi (const ' o.real '* du, const ' o.real '* DJ, const ' ...
     o.real ' rho, const '  o.real '* gps, ' '\n',...
     '\t const ' o.real '* mu, const ' o.real '* dm, ' o.real '* dot_phi){' '\n\n'])];
@@ -3794,6 +3907,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
 alpha = o.stepSize;
 
+code = [code, sprintf(['\n' '/* It checks the decrease condition of the merit function */' '\n'])];
 code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real ' dot_phi, const ' o.real ' du_sqr, const ' ...
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
 code = [code, sprintf(['\t' 'unsigned int res = 2;' '\n\n'])];
@@ -3824,6 +3938,7 @@ N = o.N;
 
 if o.merit_function ~= 2
     
+    code = [code, sprintf(['\n' '/* one_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' one_norm (const ' o.real '* g){' '\n\n',...
         '\t' 'int ii = 0;' '\n'...
         '\t' o.real ' norm = 0.0;' '\n\n',...
@@ -3834,7 +3949,7 @@ if o.merit_function ~= 2
         '\t' 'return norm;' '\n',...
         '}' '\n\n'])];
     
-    
+    code = [code, sprintf(['\n' '/* inf_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' inf_norm (const ' o.real '* g){' '\n\n',...
         '\t' 'int ii = 0;' '\n'...
         '\t' o.real ' norm = 0.0;' '\n\n',...
@@ -3846,7 +3961,7 @@ if o.merit_function ~= 2
         '}' '\n\n'])];
     
 else
-    
+    code = [code, sprintf(['\n' '/* two_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' two_norm (const ' o.real '* g){' '\n\n',...
         '\t' 'int ii = 0;' '\n'...
         '\t' o.real ' norm = 0.0, norm2 = 0.0;' '\n\n',...
@@ -3861,6 +3976,7 @@ else
 end
 
 %% det_phi
+code = [code, sprintf(['\n' '/* it computes the merit function phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_phi (const ' o.real ' J, const ' o.real '* gps, const ',...
     o.real ' rho, ' o.real '* phi){' '\n\n'])];
 
@@ -3887,7 +4003,7 @@ info.flops.ls = info.flops.it; %det_phi called in ls too.
 
 %% det_dot_phi
 
-
+code = [code, sprintf(['\n' '/* it computes the derivative of the merit function dot_phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_dot_phi (const ' o.real '* du, const ' o.real '* DJ, const ' ...
     o.real ' rho, const '  o.real '* gps, ' o.real '* dot_phi){' '\n\n'])];
 
@@ -3919,6 +4035,7 @@ code = [code, sprintf(['}' '\n\n'])];
 
 %% conditions_rho
 
+code = [code, sprintf(['\n' '/* it updates the penalty parameter rho */' '\n'])];
 code = [code, sprintf([o.inline ' void update_rho (const ' o.real '* muG, ' o.real '* rho, ' o.real '* rho_hat){' '\n\n'])];
 
 if o.merit_function == 1
@@ -3946,6 +4063,7 @@ code = '';
 data = '';
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
+code = [code, sprintf(['\n' '/*  dx = t*x + xref */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({eye(sum(o.nc)), eye(sum(o.nc))}, ...
     'names', struct('fun', 'weighted_sum_Nnc', 'M',...
     {'I'}, 'v', {{'x', 'xref'}}, 'r', 'dx'),...
@@ -3963,6 +4081,7 @@ function [code, data, info] = generate_weighted_sum_nu(o)
 code = '';
 data = '';
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
+code = [code, sprintf(['\n' '/*  du = t*u + uref */' '\n'])];
 [d, c, in] = falcopt.generateMVMult({eye(o.N*o.nu), eye(o.N*o.nu)}, ...
     'names', struct('fun', 'weighted_sum_Nnu', 'M',...
     {'I'}, 'v', {{'x', 'xref'}}, 'r', 'dx'),...
@@ -3984,6 +4103,7 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0
 
 % TODO: make parameter struct
 p.tau = [0.01 1-0.01];
+code = [code, sprintf(['\n' '/* it generates a safeguarded quadratic interpolation */' '\n'])];
 code = [code, sprintf([o.indent.code o.inline ' ' o.real ' quadratic_interp (const ' o.real ' f_l, const ', o.real ' g_l, const ' o.real ' t_u, const ' o.real ' f_u) {' '\n' '\n'])];
 code = [code, sprintf([o.indent.code o.indent.generic o.real ' t_theo;' '\n' '\n'])];
 code = [code, sprintf([o.indent.code o.indent.generic 't_theo = -0.5*(g_l*t_u*t_u)/(f_u - f_l - g_l*t_u);' '\n'])];
@@ -4003,6 +4123,7 @@ end
 function [code, data, info] = generate_compute_max(o)
 code = '';
 data = '';
+code = [code, sprintf(['\n' '/*  compute maximum of a vector */' '\n'])];
 code = [code, sprintf([o.indent.code o.inline ' ' o.real ' compute_max_Nnc( const ' o.real '* x) {' '\n' ...
     o.indent.code o.indent.generic 'unsigned int ii = 0;' '\n',...
     o.indent.code o.indent.generic o.real ' m = -100.0;' '\n' '\n'])];
