@@ -85,7 +85,7 @@
 %   debug              - Level of debug (number of inputs/outputs of
 %                         generated functions). Default: 1
 %   indent             - Indentation to be used in code generation.
-%                         Default: '\t'
+%                         Default: struct('code', '', 'data', '', 'generic', '\t' ) 
 %   inline             - Inline keyword to be used. Default: 'inline'
 %
 % Outputs:
@@ -134,7 +134,7 @@ p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max
 p.addParameter('eps', 1e-3, @(x)(isnumeric(x) && x >= eps)); % tolerance
 p.addParameter('tolLs', 1e-4, @(x)(isnumeric(x) && x >= eps)); % line search min progress
 p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
-p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t'), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
+p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
 p.addParameter('inline', '', @ischar);
 p.addParameter('name','my_code', @ischar);
 p.addParameter('build_MEX',true, @islogical);
@@ -569,8 +569,10 @@ switch o.gradients
                     libr = [libr, sprintf('#include "external_functions.c" \n')];
                 end
             end
-            data = [ data, sprintf('/*static data for jacobian_u*/\nstatic double G[%d];\n',max(o.Jac_u_struct(:)))];
-            data = [ data, sprintf('/*static data for jacobian_x*/\nstatic double F[%d];\n',max(o.Jac_x_struct(:)))];
+            data = [ data, sprintf([o.indent.data '/*static data for jacobian_u*/' '\n'...
+                o.indent.data 'static double G[%d];' '\n'],max(o.Jac_u_struct(:)))];
+            data = [ data, sprintf([o.indent.data '/*static data for jacobian_x*/' '\n' ...
+                o.indent.data 'static double F[%d];' '\n'],max(o.Jac_x_struct(:)))];
         else
             error(['file external_functions.c not found in directory ' path]);
         end
@@ -693,41 +695,41 @@ end
 
 %% Declaration of variables
 
-optCode = [optCode, sprintf(['\t' 'unsigned int conditions_f = 1, conditions_x = 1,' '\n' ...
-    '\t\t' 'conditions_n = 1, cond_err = 1,' '\n',...
-    '\t\t' 'it = 0, it_ls = 0, ii = 0, jj = 0;' '\n'...
-    '\t' 'int cond = -2;' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic  'unsigned int conditions_f = 1, conditions_x = 1,' '\n' ...
+    o.indent.generic o.indent.generic 'conditions_n = 1, cond_err = 1,' '\n',...
+    o.indent.generic o.indent.generic 'it = 0, it_ls = 0, ii = 0, jj = 0;' '\n'...
+    o.indent.generic  'int cond = -2;' '\n'])];
 
 if o.merit_function == 0
-    optCode = [optCode, sprintf(['\t' 'unsigned int flag_ini = 0;' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  'unsigned int flag_ini = 0;' '\n'])];
 else
-    optCode = [optCode, sprintf(['\t' 'unsigned int reset_rho = 0;' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  'unsigned int reset_rho = 0;' '\n'])];
 end
 
-optCode = [optCode, sprintf(['\t' o.real ' J= 0.0, alpha = ' falcopt.internal.num2str(alpha, o.precision) ', Jt = 0.0,' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic  o.real ' J= 0.0, alpha = ' falcopt.internal.num2str(alpha, o.precision) ', Jt = 0.0,' '\n'])];
 if o.debug > 1
-    optCode = [optCode, sprintf(['\t\t' 'xp[%d],' '\n'],o.N*o.nx)];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'xp[%d],' '\n'],o.N*o.nx)];
 else
-    optCode = [optCode, sprintf(['\t\t' 'x[%i], xp[%d],' '\n'],o.N*o.nx,o.N*o.nx)];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'x[%i], xp[%d],' '\n'],o.N*o.nx,o.N*o.nx)];
 end
-optCode = [optCode, sprintf(['\t\t' 'dot_J[%d], du[%d], up[%d],' '\n'],o.N*o.nu,o.N*o.nu,o.N*o.nu)];
-optCode = [optCode, sprintf(['\t\t' 'gps[%d], gpsp[%d],' '\n'],sum(o.nc),sum(o.nc))];
-optCode = [optCode, sprintf(['\t\t' 'sl[%d], sl_sqr[%d], dsl[%d], slp[%d], slp_sqr[%d], muG[%d],' '\n'],...
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'dot_J[%d], du[%d], up[%d],' '\n'],o.N*o.nu,o.N*o.nu,o.N*o.nu)];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'gps[%d], gpsp[%d],' '\n'],sum(o.nc),sum(o.nc))];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'sl[%d], sl_sqr[%d], dsl[%d], slp[%d], slp_sqr[%d], muG[%d],' '\n'],...
     sum(o.nc),sum(o.nc),sum(o.nc),sum(o.nc),sum(o.nc),sum(o.nc))];
 
 if o.merit_function == 0
-    optCode = [optCode, sprintf(['\t\t' 'mu[%d], dm[%d], mup[%d],' '\n' ...
-        '\t\t' 'dsl_sqr = 0.0, gps_sqr = 0.0, dm_sqr = 0.0, rho_hat_tmp = 0.0,' '\n'],sum(o.nc),sum(o.nc),sum(o.nc))];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'mu[%d], dm[%d], mup[%d],' '\n' ...
+        o.indent.generic o.indent.generic 'dsl_sqr = 0.0, gps_sqr = 0.0, dm_sqr = 0.0, rho_hat_tmp = 0.0,' '\n'],sum(o.nc),sum(o.nc),sum(o.nc))];
 end
 
 if (o.contractive || o.terminal)
-    optCode = [optCode, sprintf(['\t\t' 'psi_N[1], psi_Np[1], dot_psi_N[' num2str(o.N*o.nu) '],' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'psi_N[1], psi_Np[1], dot_psi_N[' num2str(o.N*o.nu) '],' '\n'])];
 end
 
-optCode = [optCode, sprintf(['\t\t' 'rho = 0.0, rho_hat = 0.0,' '\n'])];
-optCode = [optCode, sprintf(['\t\t' 'phi0 = 0.0, phit = 0.0, phi0_dot = 0.0,' '\n'])];
-optCode = [optCode, sprintf(['\t\t' 't = 0.0, t_u = 0.0,' '\n'])];
-optCode = [optCode, sprintf(['\t\t' 'du_sqr = 0.0, u_sqr = 0.0;' '\n' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'rho = 0.0, rho_hat = 0.0,' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'phi0 = 0.0, phit = 0.0, phi0_dot = 0.0,' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 't = 0.0, t_u = 0.0,' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'du_sqr = 0.0, u_sqr = 0.0;' '\n' '\n'])];
 
 % possibility to define a variable in the future that reuses
 % computationally expensive expressions
@@ -740,9 +742,9 @@ code = [code, c];
 data = [data, d];
 optCode = [optCode, sprintf(['/* Initialization of the predicted state x (dimension: N*nx) */' '\n'])];
 if o.nw >0
-    optCode = [optCode, sprintf(['\t' 'det_x(x0,u,w,x);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  'det_x(x0,u,w,x);' '\n'])];
 else
-    optCode = [optCode, sprintf(['\t' 'det_x(x0,u,x);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  'det_x(x0,u,x);' '\n'])];
 end
 
 [c, d, in] = generate_objective_gradient_oracle(o);
@@ -760,13 +762,13 @@ c_contr_use = argument_contr_value(o,false);
 
 if (o.contractive || o.terminal)
     if o.terminal
-        optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+        optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Initialization of the cost J, its derivative dot_J,' '\n'...
             'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
     elseif o.contractive
-        optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+        optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Initialization of the cost J, its derivative dot_J,' '\n'...
             'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
     end
-    optCode = [optCode, sprintf(['\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
 
 %     for jj=1:length(o.K_nc)
@@ -790,30 +792,30 @@ code = [code, c];
 data = [data, d];
 info.flops.once = falcopt.internal.addFlops(info.flops.once, in.flops);
 
-optCode = [optCode, sprintf(['\n' '\t' '/* This function initializes the slack variables sl, its squares sl_sqr ' '\n'...
+optCode = [optCode, sprintf(['\n' o.indent.generic  '/* This function initializes the slack variables sl, its squares sl_sqr ' '\n'...
     'and the function gps = g + 0.5 * diag(sl_sqr) */' '\n'])];
-optCode = [optCode, sprintf(['\t' 'initialize_slack(u' c_psi_use c_contr_use ', sl, sl_sqr, gps' ');' '\n\n'])];
+optCode = [optCode, sprintf([o.indent.generic  'initialize_slack(u' c_psi_use c_contr_use ', sl, sl_sqr, gps' ');' '\n\n'])];
 
 %% here we loop over the iterations it
 
-optCode = [optCode, sprintf(['\n' '\t' '/* Outer loop over the iterates it. The break command interrups the cycle \n'...
-    '\t' 'if convergence or error is encountered before termination */' '\n'])];
+optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Outer loop over the iterates it. The break command interrups the cycle \n'...
+    o.indent.generic  'if convergence or error is encountered before termination */' '\n'])];
 
-optCode = [optCode, sprintf(['\t' 'for (it=0; it < %i; it++) {' '\n'], o.maxIt)];
+optCode = [optCode, sprintf([o.indent.generic  'for (it=0; it < %i; it++) {' '\n'], o.maxIt)];
 
 if (o.contractive || o.terminal)
     if o.terminal
-        optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+        optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Computation of the cost J, its derivative dot_J,' '\n'...
             'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
     elseif o.contractive
-        optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+        optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Computation of the cost J, its derivative dot_J,' '\n'...
             'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
     end
-    optCode = [optCode, sprintf(['\t\t' 'if (it > 0) {' '\n'...
-        '\t\t\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use '); }' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (it > 0) {' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use '); }' '\n\n'])];
 else
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J and its derivative dot_J */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Computation of the cost J and its derivative dot_J */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
 
 
@@ -836,34 +838,34 @@ code = [code, c];
 data = [data, d];
 info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 
-optCode = [optCode, sprintf(['\n' '\t\t' '/* Compute the gradient step, projected onto the linearization of the constraints \n' ...
+optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Compute the gradient step, projected onto the linearization of the constraints \n' ...
     'du: primal variable gradient steps, dsl: slack variables, muG: dual variables */' '\n'])];
-optCode = [optCode, sprintf(['\t\t' 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
 
-optCode = [optCode, sprintf(['\t\t' 'dot_product_Nnu(&du_sqr, du, du);' '\n',...
-    '\t\t' 'dot_product_Nnu(&u_sqr, u, u);' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'dot_product_Nnu(&du_sqr, du, du);' '\n',...
+    o.indent.generic o.indent.generic 'dot_product_Nnu(&u_sqr, u, u);' '\n'])];
 
 [c, d, in] = generate_dot_product_Nnc(o);
 code = [code, c];
 data = [data, d];
 if o.merit_function == 0
-    optCode = [optCode, sprintf(['\t\t' 'dot_product_Nnc(&gps_sqr, gps, gps);' '\n',...
-        '\t\t' 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'dot_product_Nnc(&gps_sqr, gps, gps);' '\n',...
+        o.indent.generic o.indent.generic 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
     in.flops = falcopt.internal.multFlops( in.flops, 3);
     info.flops.it = falcopt.internal.addFlops( info.flops.it, in.flops);
 end
 
 if o.merit_function == 0
-    optCode = [optCode, sprintf(['\t\t' 'if (it==0)' '\n',...
-        '\t\t\t' 'copy_Nnc(mu, muG);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (it==0)' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'copy_Nnc(mu, muG);' '\n'])];
     info.flops.it.comp = info.flops.it.comp +1;
     
     [c, d, in] = generate_difference(o);
     % generate diff_Nnc
     code = [code, c];
     data = [data, d];
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* dm = muG - mu; */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'diff_Nnc(dm,muG,mu);' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* dm = muG - mu; */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'diff_Nnc(dm,muG,mu);' '\n\n'])];
     info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
     
     % generate function that computes the merit function
@@ -902,26 +904,26 @@ end
 
 if o.merit_function == 0
     
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* compute the directional derivative of the merit function, phi0_dot */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* compute the directional derivative of the merit function, phi0_dot */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
     
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* Check the penalty parameter rho via phi0_dot */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr,alpha)==0){' '\n',...
-        '\t\t\t' 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
-        '\t\t\t' 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
-    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Update the penalty parameter rho */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'flag_ini = 1;' '\n'])];
-    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Recompute phi0_dot */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' '}' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Check the penalty parameter rho via phi0_dot */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr,alpha)==0){' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Update the penalty parameter rho */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'flag_ini = 1;' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Recompute phi0_dot */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic '}' '\n'])];
     
     
-    optCode = [optCode, sprintf(['\t\t' 'if ((flag_ini == 1)||(it == 0)){' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'det_phi (J, gps, mu, rho, &phi0);' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t' 'flag_ini = 0;' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' '}' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if ((flag_ini == 1)||(it == 0)){' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'det_phi (J, gps, mu, rho, &phi0);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'flag_ini = 0;' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic '}' '\n\n'])];
     
     info.flops.it.comp = info.flops.it.comp + 4;  % 3+ 1 in fmax
     info.flops.it.mul = info.flops.it.mul +3;
@@ -930,11 +932,11 @@ if o.merit_function == 0
     
 else
     
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* Update the penalty parameter rho \n' ...
-        '\t\t\t\t' 'and compute merit function phi0 and its derivative phi0_dot */' '\n\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'update_rho(muG, &rho, &rho_hat);' '\n',...
-        '\t\t' 'det_phi (J, gps, rho, &phi0);' '\n',...
-        '\t\t' 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Update the penalty parameter rho \n' ...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'and compute merit function phi0 and its derivative phi0_dot */' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'update_rho(muG, &rho, &rho_hat);' '\n',...
+        o.indent.generic o.indent.generic 'det_phi (J, gps, rho, &phi0);' '\n',...
+        o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n'])];
     
 end
 
@@ -942,10 +944,10 @@ end
 
 if o.merit_function == 0
     
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
-        '\t\t\t' 't = 1.0;' '\n',...
-        '\t\t\t' 't_u = 1.0;' '\n',...
-        '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
     info.flops.it.comp = info.flops.it.comp +1;
     
     [c,d,in] = generate_weighted_sum_nc(o);
@@ -972,60 +974,60 @@ if o.merit_function == 0
     info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     % update u and slp
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* up = u + t*du; */'])];
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* slp = sl + t*dsl; */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
-        '\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* slp = sl + t*dsl; */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* mup = mu + t*dm; */' '\n'])];
-        optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
+        optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* mup = mu + t*dm; */' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx) using the new predicted input up (dim. N*nu) */' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the predicted state xp (dim. N*nx) using the new predicted input up (dim. N*nu) */' '\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
-            '\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,w,xp);' '\n'])];
     else
         optCode = [optCode, sprintf([...
-            '\t\t\t\t' 'det_x(x0,up,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,xp);' '\n'])];
     end
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp ' '\n'...
-        '\n' '\t\t\t\t' 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the new cost Jt, square the slack variables slp ' '\n'...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
-        '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
-        '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
        
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
-        optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
-        '\n' '\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
-        '\t\t\t\t\t' 'break;' '\n',...
-        '\t\t\t\t' '}' '\n',...
-        '\t\t\t\t' 'else {' '\n',...
-        '\t\t\t\t\t' 't_u = t;' '\n',...
-        '\n' '\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
-        '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
-        '\t\t\t\t' '}' '\n',...
-        '\t\t\t' '}' '\n',...
-        '\n' '\t\t\t' '/* if t gets too small, output an error */' '\n',...
-        '\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
-        '\t\t\t\t' 'cond_err = 0;' '\n',...
-        '\t\t' '}' '\n',...
-        '\t\t' 'else {' '\n',...
-        '\n' '\t\t\t' '/* phi0_dot is sufficiently small and we have converged */' '\n' ...
-        '\t\t\t' 'conditions_f = 0;' '\n' ...
-        '\t\t' '}' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* step size t accepted. Break the line-search */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'break;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'else {' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't_u = t;' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Reduce the step size t via quadratic interpolation */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic '/* if t gets too small, output an error */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond_err = 0;' '\n',...
+        o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic 'else {' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic '/* phi0_dot is sufficiently small and we have converged */' '\n' ...
+        o.indent.generic o.indent.generic o.indent.generic 'conditions_f = 0;' '\n' ...
+        o.indent.generic o.indent.generic '}' '\n\n'])];
     info.flops.ls.comp = info.flops.ls.comp +1;
     info.flops.ls.mul = info.flops.ls.mul +2;
     info.flops.it.comp = info.flops.it.comp +1;
@@ -1033,11 +1035,11 @@ if o.merit_function == 0
 else
     %% recompute rho
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t' '/* Check conditions on phi0_dot for convergence and start line-search */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
-        '\t\t\t' 't = 1.0;' '\n',...
-        '\t\t\t' 't_u = 1.0;' '\n',...
-        '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Check conditions on phi0_dot for convergence and start line-search */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
     info.flops.it.comp = info.flops.it.comp +1;
     
     [c,d,in] = generate_weighted_sum_nc(o);
@@ -1062,125 +1064,125 @@ else
     info.flops.ls = falcopt.internal.addFlops(info.flops.ls, in.flops);
     
     % update u and slp
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* up = u + t*du; */'])];
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* slp = sl + t*dsl; */' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* slp = sl + t*dsl; */' '\n\n'])];
     
-    optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
-        '\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* mup = mu + t*dm; */' '\n\n'])];
-        optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
+        optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* mup = mu + t*dm; */' '\n\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx)' '\n'...
-        '\n' '\t\t\t\t' 'using the new predicted input up (dim. N*nu) */' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the predicted state xp (dim. N*nx)' '\n'...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'using the new predicted input up (dim. N*nu) */' '\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
-            '\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,w,xp);' '\n'])];
     else
         optCode = [optCode, sprintf([...
-            '\t\t\t\t' 'det_x(x0,up,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,xp);' '\n'])];
     end
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp' '\n'...
-        '\n' '\t\t\t\t' 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the new cost Jt, square the slack variables slp' '\n'...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'and compute gpsp = gps + 0.5 * slp_sqr */' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
-        '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
-        '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the merit function phit (function of the step size t) */' '\n\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
-        optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
-        '\n' '\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
-        '\t\t\t\t\t' 'break;' '\n',...
-        '\t\t\t\t' '}' '\n',...
-        '\t\t\t\t' 'else {' '\n',...
-        '\n' '\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
-        '\t\t\t\t\t' 't_u = t;' '\n',...
-        '\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
-        '\t\t\t\t' '}' '\n',...
-        '\n' '\t\t\t\t' '/* if t gets too small, try resetting rho */' '\n',...
-        '\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n'...
-        '\t\t\t\t\t' 'reset_rho = 1;' '\n'...
-        '\t\t\t\t' '}' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* step size t accepted. Break the line-search */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'break;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'else {' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Reduce the step size t via quadratic interpolation */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't_u = t;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* if t gets too small, try resetting rho */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'reset_rho = 1;' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n'])];
     
     optCode = [optCode, sprintf([...
-        '\t\t\t' '/* Reset rho to rho_hat if rho is overly big */' '\n'...
-        '\t\t\t' 'if (reset_rho == 1){' '\n'...
-        '\t\t\t\t' 'reset_rho = 0;' '\n'...
-        '\t\t\t\t' 'rho = rho_hat;' '\n'...
-        '\n' '\t\t\t\t\t' '/* Reset phi0 and phi0_dot */' '\n'...
-        '\t\t\t\t' 'det_phi (J, gps, rho, &phi0);' '\n',...
-        '\t\t\t\t' 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n',...
+        o.indent.generic o.indent.generic o.indent.generic '/* Reset rho to rho_hat if rho is overly big */' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic 'if (reset_rho == 1){' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'reset_rho = 0;' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'rho = rho_hat;' '\n'...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Reset phi0 and phi0_dot */' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (J, gps, rho, &phi0);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n',...
         ...
-        '\t\t\t\t' 't = 1.0;' '\n',...
-        '\t\t\t\t' 't_u = 1.0;' '\n',...
-        '\t\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
     info.flops.it.comp = info.flops.it.comp +1;
     
     % update u and slp
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* up = u + t*du; */'])];
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* slp = sl + t*dsl; */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t\t' 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
-        '\t\t\t\t\t' 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* up = u + t*du; */'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* slp = sl + t*dsl; */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnu(up,du,u,&t);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(slp,dsl,sl,&t);' '\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\t\t\t\t' 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'weighted_sum_Nnc(mup,dm,mu,&t);' '\n\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* Compute the predicted state xp (dim. N*nx)' '\n'...
-        '\t\t\t\t\t\t' 'using the new predicted input up (dim. N*nu) */' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the predicted state xp (dim. N*nx)' '\n'...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'using the new predicted input up (dim. N*nu) */' '\n\n'])];
     if o.nw > 0
         optCode = [optCode, sprintf([...
-            '\t\t\t\t\t' 'det_x(x0,up,w,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,w,xp);' '\n'])];
     else
         optCode = [optCode, sprintf([...
-            '\t\t\t\t\t' 'det_x(x0,up,xp);' '\n'])];
+            o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_x(x0,up,xp);' '\n'])];
     end
     
     c_psip_use = argument_def_internal_psi_plus(o,false);
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t\t' '/* Compute the new cost Jt, square the slack variables slp and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the new cost Jt, square the slack variables slp and compute gpsp = gps + 0.5 * slp_sqr */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_J(x0, up, xp' c_tr_use ', &Jt' c_psip_use ');' '\n\n'])];
     
     optCode = [optCode, sprintf([...
-        '\t\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
-        '\t\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
-        optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
     else
-        optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
     
-    optCode = [optCode, sprintf(['\n' '\t\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
-    optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
-        '\n' '\t\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
-        '\t\t\t\t\t\t' 'break;' '\n',...
-        '\t\t\t\t\t' '}' '\n',...
-        '\t\t\t\t\t' 'else {' '\n',...
-        '\n' '\t\t\t\t\t\t' '/* Reduce the step size t via quadratic interpolation */' '\n',...
-        '\t\t\t\t\t\t' 't_u = t;' '\n',...
-        '\t\t\t\t\t\t' 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
-        '\t\t\t\t\t' '}' '\n',...
-        '\n' '\t\t\t\t\t' '/* if t gets too small, output an error */' '\n',...
-        '\t\t\t\t\t' 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
-        '\t\t\t\t\t\t' 'cond_err = 0;' '\n',...
-        '\t\t\t\t' '}' '\n',...
-        '\t\t\t' '}' '\n',...
-        '\t\t' '}' '\n',...
-        '\t\t' 'else' '\n',...
-        '\t\t\t' 'conditions_f = 0;' '\n\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Check the Armijo condition */' '\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* step size t accepted. Break the line-search */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'break;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'else {' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* Reduce the step size t via quadratic interpolation */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't_u = t;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't = quadratic_interp (phi0, phi0_dot, t_u, phit);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        '\n' o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic '/* if t gets too small, output an error */' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (t_u <= ' falcopt.internal.num2str(o.tolLs, o.precision) ')' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond_err = 0;' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic 'else' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'conditions_f = 0;' '\n\n'])];
     info.flops.ls.comp = info.flops.ls.comp +1;
     info.flops.ls.mul = info.flops.ls.mul +2;
     info.flops.it.comp = info.flops.it.comp +1;
@@ -1189,31 +1191,31 @@ end
 
 %% the code continues
 
-optCode = [optCode, sprintf(['\t\t' 'iter_ls[it] = it_ls+1;','\n',...
-    '\t\t' 'if (it_ls== %d)' '\n',...
-    '\t\t\t' 'cond_err = 0;' '\n\n'],o.maxItLs)];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'iter_ls[it] = it_ls+1;','\n',...
+    o.indent.generic o.indent.generic 'if (it_ls== %d)' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'cond_err = 0;' '\n\n'],o.maxItLs)];
 info.flops.once.add = info.flops.once.add +1;
 %         optCode = [optCode, sprintf(['if (it==1)
 
 %      optCode = [optCode, sprintf(['if (cond_err == 0){' '\n' ...
-%          '\t' 'u[0] = rho;\n' ...
-%          '\t' 'u[1] = phi0_dot; \n' ...
-%          '\t' 'return cond;}' '\n'])];
+%          o.indent.generic  'u[0] = rho;\n' ...
+%          o.indent.generic  'u[1] = phi0_dot; \n' ...
+%          o.indent.generic  'return cond;}' '\n'])];
 
 %% update u, slack and dual variables
 
-optCode = [optCode, sprintf(['\n' '\t\t' '/* update step */' '\n'])];
+optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* update step */' '\n'])];
 if o.merit_function == 0
-    optCode = [optCode, sprintf([ '\t\t' 'copy_Nnc(mu,mup);' '\n'])];
+    optCode = [optCode, sprintf([ o.indent.generic o.indent.generic 'copy_Nnc(mu,mup);' '\n'])];
 end
 
-optCode = [optCode, sprintf(['\t\t' 'copy_Nnu(u,up);' '\n',...
-    '\t\t' 'copy_Nnc(sl,slp);' '\n',...
-    '\t\t' 'copy_Nnc(sl_sqr,slp_sqr);' '\n',...
-    '\t\t' 'copy_Nnc(gps,gpsp);' '\n',...
-    '\t\t' 'copy_Nnx(x,xp);' '\n',...
-    '\t\t' 'J = Jt;' '\n',...
-    '\t\t' 'phi0 = phit;' '\n\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'copy_Nnu(u,up);' '\n',...
+    o.indent.generic o.indent.generic 'copy_Nnc(sl,slp);' '\n',...
+    o.indent.generic o.indent.generic 'copy_Nnc(sl_sqr,slp_sqr);' '\n',...
+    o.indent.generic o.indent.generic 'copy_Nnc(gps,gpsp);' '\n',...
+    o.indent.generic o.indent.generic 'copy_Nnx(x,xp);' '\n',...
+    o.indent.generic o.indent.generic 'J = Jt;' '\n',...
+    o.indent.generic o.indent.generic 'phi0 = phit;' '\n\n'])];
 
 %% check convergence
 
@@ -1224,41 +1226,41 @@ info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 code = [code, c, sprintf('\n\n')];
 data = [data, d];
 
-optCode = [optCode, sprintf(['\n' '\t\t' '/* check convergence (update step) */' '\n'])];
-optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
-optCode = [optCode,sprintf(['\t\t\t' 'conditions_x = 1;' '\n',...
-    '\t\t' 'else' '\n',...
-    '\t\t\t' 'conditions_x = 0;' '\n'])];
+optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* check convergence (update step) */' '\n'])];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'conditions_x = 1;' '\n',...
+    o.indent.generic o.indent.generic 'else' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'conditions_x = 0;' '\n'])];
 
 
-optCode = [optCode,sprintf(['\t\t' 'if (it == %d)' '\n'],o.maxIt-1)];
-optCode = [optCode,sprintf(['\t\t\t' 'conditions_n = 0;' '\n'])];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if (it == %d)' '\n'],o.maxIt-1)];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'conditions_n = 0;' '\n'])];
 
 
-optCode = [optCode,sprintf(['\t\t' 'if(!((conditions_f && cond_err) && (conditions_n && conditions_x)))' '\n'])];
-optCode = [optCode,sprintf(['\t\t\t' 'break;' '\n\n',...
-    '\t' '}' '\n\n'])];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if(!((conditions_f && cond_err) && (conditions_n && conditions_x)))' '\n'])];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'break;' '\n\n',...
+    o.indent.generic  '}' '\n\n'])];
 info.flops.it.comp = info.flops.it.comp +3;
 
-optCode = [optCode, sprintf(['\n' '\t' '/* Assign exitflag */' '\n'])];
-optCode = [optCode,sprintf(['\t' '(*iter) = it+1;' '\n',...
-    '\t' 'if (conditions_f == 0)' '\n',...
-    '\t\t' 'cond = 2;' '\n',...
-    '\t' 'else {' '\n',...
-    '\t\t' 'if (conditions_x == 0)' '\n',...
-    '\t\t\t' 'cond = 1;' '\n',...
-    '\t\t' 'else {' '\n',...
-    '\t\t\t' 'if (conditions_n == 0)' '\n',...
-    '\t\t\t\t' 'cond = 0;' '\n',...
-    '\t\t\t' 'else' '\n',...
-    '\t\t\t\t' 'cond = -1;' '\n'...
-    '\t\t' '}' '\n'...
-    '\t' '}' '\n\n'])];
+optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign exitflag */' '\n'])];
+optCode = [optCode,sprintf([o.indent.generic  '(*iter) = it+1;' '\n',...
+    o.indent.generic  'if (conditions_f == 0)' '\n',...
+    o.indent.generic o.indent.generic 'cond = 2;' '\n',...
+    o.indent.generic  'else {' '\n',...
+    o.indent.generic o.indent.generic 'if (conditions_x == 0)' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'cond = 1;' '\n',...
+    o.indent.generic o.indent.generic 'else {' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'if (conditions_n == 0)' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = 0;' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'else' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = -1;' '\n'...
+    o.indent.generic o.indent.generic '}' '\n'...
+    o.indent.generic  '}' '\n\n'])];
 if o.debug > 1
-    optCode = [optCode, sprintf(['\n' '\t\t' '/* Output cost function */' '\n'])];
-    optCode = [optCode, sprintf(['\t' '*fval = J;' '\n'])];
+    optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Output cost function */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic  '*fval = J;' '\n'])];
 end
-optCode = [optCode, sprintf(['\t' 'return cond;' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic  'return cond;' '\n'])];
 optCode = [optCode, sprintf('} \n\n')];
 info.flops.once.add = info.flops.once.add +1;
 info.flops.once.comp = info.flops.once.comp +3;
@@ -1379,19 +1381,19 @@ else
     code = [code, sprintf('/* Dynamics of the system */\n')];
     if( o.nw > 0)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
-        code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],3)];
-        code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n'])];
     else
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){' '\n\n'])];
-        code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],2)];
-        code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)];
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n'])];
     end
     
-    code = [code, sprintf(['\t' fName '_casadi( in, &xp, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n'])];
+    code = [code, sprintf([o.indent.generic  fName '_casadi( in, &xp, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n'])];
     if( ~isempty(staticName))
-        data = [data, sprintf(['\t' 'static ' o.real ' ' staticName '[%i];' '\n'], in_y.stored.num)];
+        data = [data, sprintf([o.indent.generic  'static ' o.real ' ' staticName '[%i];' '\n'], in_y.stored.num)];
     end
     info.y.structure = in_y;
 end
@@ -1416,7 +1418,7 @@ for k = 1:length(varargin)
     
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
-        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
+        data = [data, sprintf([o.indent.data '/* Static data for jacobian w.r.t %c variable */\n'],varargin{k})]; %#ok
         [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
             'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
             'static', true, 'const', true, 'verbose', o.verbose);
@@ -1434,20 +1436,20 @@ for k = 1:length(varargin)
         code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
         if( o.nw > 0)
             code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
-            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],3)]; %#ok
-            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
-                '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ]; %#ok
+                o.indent.generic  J_name '( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         else
             code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
-            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],2)]; %#ok
-            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
-                '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ]; %#ok
+                o.indent.generic  J_name '( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
         
-        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
-        data = [data, sprintf(['\t' 'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)]; %#ok
+        data = [data, sprintf([o.indent.data '/* Static data for jacobian w.r.t %c variable */\n'],varargin{k})]; %#ok
+        data = [data, sprintf([o.indent.data  'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)]; %#ok
         info.(struct_name).struct.structure = in;
         try
             info.(struct_name).flops =   jac.getAlgorithmSize(); %flops
@@ -1703,7 +1705,7 @@ for k = 1:2
     end
     [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
     info.(struct_name).static = i.static;
-    data = [ data, sprintf(['\t/*Static data for ' J_name '*/\n'])]; %#ok
+    data = [ data, sprintf([o.indent.generic '/*Static data for ' J_name '*/\n'])]; %#ok
     if( info.(struct_name).static)
         data = [data, sprintf(['\tstatic const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
         data = [data, d, sprintf(['};\n\n'])]; %#ok
@@ -1807,7 +1809,7 @@ for ii=1:length(o.K_amu)
 end
 
 % generate a selector that chooses which a - u to use
-code = [code, sprintf(['\n' o.indent.code o.inline ' void build_amu(const ' o.real '* u, const unsigned int k, ' o.real '* amu){' '\n\n'])];
+code = [code, sprintf(['\n' o.indent.code o.inline 'void build_amu(const ' o.real '* u, const unsigned int k, ' o.real '* amu){' '\n\n'])];
 for ii=1:length(o.K_amu)
     check = generateCheck_custom(o.K_amu{ii}, [o.indent.code o.indent.generic], 'k');
     code = [code, check, sprintf('\n')]; %#ok
@@ -1838,12 +1840,12 @@ for ii=1:length(o.K_umb)
 end
 
 % generate a selector that chooses which u - b to use
-code = [code, sprintf(['\n' o.indent.code o.inline ' void build_umb(const ' o.real '* u, const unsigned int k, ' o.real '* umb){' '\n\n'])];
+code = [code, sprintf(['\n' o.indent.code o.inline 'void build_umb(const ' o.real '* u, const unsigned int k, ' o.real '* umb){' '\n\n'])];
 for ii=1:length(o.K_umb)
-    check = generateCheck_custom(o.K_umb{ii}, [o.indent.code '\t'], 'k');
+    check = generateCheck_custom(o.K_umb{ii}, [o.indent.code o.indent.generic ], 'k');
     code = [code, check, sprintf('\n')]; %#ok
-    code = [code, sprintf([o.indent.code '\t\t' 'build_umb_' num2str(ii) '(&umb[0], &u[0]);' '\n'])]; %#ok
-    code = [code, sprintf([o.indent.code '\t' '}' '\n'])]; %#ok
+    code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_umb_' num2str(ii) '(&umb[0], &u[0]);' '\n'])]; %#ok
+    code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
 end
 code = [code, sprintf([o.indent.code '}' '\n'])];
 
@@ -1896,10 +1898,10 @@ if( nl_con)
                     % wrapper function
                     code = [code, sprintf(['/* Constraints evaluation*/' '\n'])]; %#ok
                     code = [code, sprintf(['void build_n_%d( const ' o.real '* z,'  o.real '* n){' '\n\n'],jj)]; %#ok
-                    code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)]; %#ok
-                    code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+                    code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
+                    code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
                     code = [code, sprintf(['\tin[0] = z;\n\n' ...
-                        '\t' 'build_n_%d_casadi( in, &n, &iw, w, mem);\t/* external casadi generated function */\n}\n\n'],jj) ]; %#ok
+                        o.indent.generic  'build_n_%d_casadi( in, &n, &iw, w, mem);' o.indent.generic '/* external casadi generated function */\n}\n\n'],jj) ]; %#ok
                     
                     % build_Dn
                     Dn{jj} = jacobian( n{jj}, z); 
@@ -1923,10 +1925,10 @@ if( nl_con)
                         % wrapper build_Dn
                         code = [code, sprintf('/* Jacobian_u of nonlinear constraints */\n')]; %#ok
                         code = [code, sprintf(['void build_Dn_%d( const ' o.real '* u, ' o.real '* Dn_fun){' '\n\n'],jj)]; %#ok
-                        code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)]; %#ok
-                        code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+                        code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
+                        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
                         code = [code, sprintf(['\tin[0] = u;\n\n' ... 
-                            '\t' 'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);\t/* external casadi generated function*/\n}\n\n'],jj) ]; %#ok
+                            o.indent.generic  'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);' o.indent.generic '/* external casadi generated function*/\n}\n\n'],jj) ]; %#ok
                         info.in_Dn_n{jj}.struct.structure = i;
                         try
                             info.in_Dn_n{jj}.flops =   Dn_f{jj}.getAlgorithmSize(); %flops
@@ -1982,20 +1984,20 @@ if( nl_con)
     % generate a selector that chooses which n to use
     code = [code, sprintf(['\n' o.indent.code 'void build_n(const ' o.real '* u, const unsigned int k, ' o.real '* n){' '\n\n'])];
     for ii=1:length(o.K_n)
-        check = generateCheck_custom(o.K_n{ii}, [o.indent.code '\t'], 'k');
+        check = generateCheck_custom(o.K_n{ii}, [o.indent.code o.indent.generic ], 'k');
         code = [code, check, sprintf('\n')]; %#ok
-        code = [code, sprintf([o.indent.code '\t\t' 'build_n_' num2str(ii) '(&u[0], &n[0]);' '\n'])]; %#ok
-        code = [code, sprintf([o.indent.code '\t' '}' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_n_' num2str(ii) '(&u[0], &n[0]);' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf([o.indent.code '}' '\n'])];
     
     % generate a selector that chooses which Dn to use
     code = [code, sprintf(['\n' o.indent.code 'void build_Dn(const ' o.real '* u, const unsigned int k, ' o.real '* Dn){' '\n\n'])];
     for ii=1:length(o.K_n)
-        check = generateCheck_custom(o.K_n{ii}, [o.indent.code '\t'], 'k');
+        check = generateCheck_custom(o.K_n{ii}, [o.indent.code o.indent.generic ], 'k');
         code = [code, check, sprintf('\n')]; %#ok
-        code = [code, sprintf([o.indent.code '\t\t' 'build_Dn_' num2str(ii) '(&u[0], &Dn[0]);' '\n'])]; %#ok
-        code = [code, sprintf([o.indent.code '\t' '}' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_Dn_' num2str(ii) '(&u[0], &Dn[0]);' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf([o.indent.code '}' '\n'])];
 end
@@ -2170,25 +2172,25 @@ data = [];
 code = [code, sprintf(['\n' '/* det_x is a forward simulation of model_mpc with initial state x0 \n'...
     'and sequence of predicted inputs u (of dim. N*nu) */' '\n'])];
 if o.nw >0
-    code = [code, sprintf([o.inline ' void det_x (const ' o.real '* x0, const ' o.real '* u, const ' o.real '* w, ' o.real '* x){' '\n\n'])];
+    code = [code, sprintf([o.inline 'void det_x (const ' o.real '* x0, const ' o.real '* u, const ' o.real '* w, ' o.real '* x){' '\n\n'])];
 else
-    code = [code, sprintf([o.inline ' void det_x (const ' o.real '* x0, const ' o.real '* u, ' o.real '* x){' '\n\n'])];
+    code = [code, sprintf([o.inline 'void det_x (const ' o.real '* x0, const ' o.real '* u, ' o.real '* x){' '\n\n'])];
 end
 
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
 if o.nw > 0
-    code = [code, sprintf(['\t' 'model_mpc(x0,u,w,x);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'model_mpc(x0,u,w,x);' '\n'])];
 else
-    code = [code, sprintf(['\t' 'model_mpc(x0,u,x);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'model_mpc(x0,u,x);' '\n'])];
 end
 
-code = [code, sprintf(['\t' 'for (ii = 1;ii < %d; ++ii)' '\n'],N)];
+code = [code, sprintf([o.indent.generic  'for (ii = 1;ii < %d; ++ii)' '\n'],N)];
 
 if o.nw > 0
-    code = [code, sprintf(['\t\t' 'model_mpc(x + (ii-1)* %d, u + ii* %d, w+ ii* %d, x + ii* %d);' '\n\n'],nx,nu,nw,nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'model_mpc(x + (ii-1)* %d, u + ii* %d, w+ ii* %d, x + ii* %d);' '\n\n'],nx,nu,nw,nx)];
 else
-    code = [code, sprintf(['\t\t' 'model_mpc(x + (ii-1)* %d, u + ii* %d, x + ii* %d);' '\n\n'],nx,nu,nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'model_mpc(x + (ii-1)* %d, u + ii* %d, x + ii* %d);' '\n\n'],nx,nu,nx)];
 end
 code = [code, sprintf(['}' '\n'])];
 
@@ -2253,66 +2255,66 @@ code = [code, sprintf([o.inline ' void det_J_and_dot_J(const ' o.real '* x0, con
     o.real '* J, ' o.real '* dot_J' c_psi_dec c_psi_dot_dec '){' '\n\n',...
     ])];
 
-code = [code, sprintf(['\t' o.real ' Px[%d], Qx[%d], mem_tmp2[%d], ' '\n'...
-    '\t\t' 'Ru[%d], tmp_x = 0.0, tmp_u = 0.0;' '\n'],...
+code = [code, sprintf([o.indent.generic  o.real ' Px[%d], Qx[%d], mem_tmp2[%d], ' '\n'...
+    o.indent.generic o.indent.generic 'Ru[%d], tmp_x = 0.0, tmp_u = 0.0;' '\n'],...
     nx,nx,nx,nu)];
 
 if o.contractive
-    code = [code, sprintf(['\t' 'int index = 0;' '\n'])];
+    code = [code, sprintf([o.indent.generic  'int index = 0;' '\n'])];
 end
 
 if trackRef
-    code = [code, sprintf(['\t' o.real ' dx[%d], du[%d];' '\n'],...
+    code = [code, sprintf([o.indent.generic  o.real ' dx[%d], du[%d];' '\n'],...
         nx,nu)];
 end
 if o.contractive
-    code = [code, sprintf(['\t' o.real ' Px_contr[%d], mem_tmp_contr[%d], tmp_contr = 0.0;' '\n'], nx, nx)];
+    code = [code, sprintf([o.indent.generic  o.real ' Px_contr[%d], mem_tmp_contr[%d], tmp_contr = 0.0;' '\n'], nx, nx)];
     if trackRef
-        code = [code, sprintf(['\t' o.real ' dx_contr[%d];' '\n'], nx)];
+        code = [code, sprintf([o.indent.generic  o.real ' dx_contr[%d];' '\n'], nx)];
     end
 elseif o.terminal
-    code = [code, sprintf(['\t' o.real ' Px_contr[%d], mem_tmp_contr[%d];' '\n'], nx, nx)];
+    code = [code, sprintf([o.indent.generic  o.real ' Px_contr[%d], mem_tmp_contr[%d];' '\n'], nx, nx)];
 end
 
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
-code = [code, sprintf(['\n' '\t' '/* Compute tmp_x (cost associated to last stage) */' '\n'])];
+code = [code, sprintf(['\n' o.indent.generic  '/* Compute tmp_x (cost associated to last stage) */' '\n'])];
 if trackRef
-    code = [code, sprintf(['\t' 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
-    code = [code, sprintf(['\t' 'Pmul(Px, dx);' '\n'])];
-    code = [code, sprintf(['\t' 'dot_product_nx_nx(&tmp_x,Px, dx);' '\n\n'])];
+    code = [code, sprintf([o.indent.generic  'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'Pmul(Px, dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'dot_product_nx_nx(&tmp_x,Px, dx);' '\n\n'])];
     if o.contractive
-        code = [code, sprintf(['\t' 'diffX(dx_contr, x + (ind-1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
-        code = [code, sprintf(['\t' 'Pmul(Px_contr, dx_contr);' '\n'...
-            '\t' 'dot_product_nx_nx(&tmp_contr,Px_contr,dx_contr);' '\n'...
-            '\t' '(*psi_N) = 0.5*tmp_contr;' '\n'])];
+        code = [code, sprintf([o.indent.generic  'diffX(dx_contr, x + (ind-1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
+        code = [code, sprintf([o.indent.generic  'Pmul(Px_contr, dx_contr);' '\n'...
+            o.indent.generic  'dot_product_nx_nx(&tmp_contr,Px_contr,dx_contr);' '\n'...
+            o.indent.generic  '(*psi_N) = 0.5*tmp_contr;' '\n'])];
     end
 else
-    code = [code, sprintf(['\t' 'Pmul(Px, x + %d);' '\n'], (N-1)*nx)];
-    code = [code, sprintf(['\t' 'dot_product_nx_nx(&tmp_x,Px, x + %d);' '\n\n'],(N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'Pmul(Px, x + %d);' '\n'], (N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'dot_product_nx_nx(&tmp_x,Px, x + %d);' '\n\n'],(N-1)*nx)];
     if o.contractive
-        code = [code, sprintf(['\t' 'Pmul(Px_contr, x+ (ind - 1)*%d);' '\n'...
-            '\t' 'dot_product_nx_nx(&tmp_contr,Px_contr,x+ (ind - 1)*%d);' '\n'...
-            '\t' '(*psi_N) = 0.5*tmp_contr;' '\n'],nx,nx)];
+        code = [code, sprintf([o.indent.generic  'Pmul(Px_contr, x+ (ind - 1)*%d);' '\n'...
+            o.indent.generic  'dot_product_nx_nx(&tmp_contr,Px_contr,x+ (ind - 1)*%d);' '\n'...
+            o.indent.generic  '(*psi_N) = 0.5*tmp_contr;' '\n'],nx,nx)];
     end
 end
 
 if o.terminal
-    code = [code, sprintf(['\t' '(*psi_N) = 0.5*tmp_x;' '\n',...
-        '\t' 'copy_nx(Px_contr,Px);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*psi_N) = 0.5*tmp_x;' '\n',...
+        o.indent.generic  'copy_nx(Px_contr,Px);' '\n'])];
     
 end
 
 if trackRef
-    code = [code, sprintf(['\t' 'diffU(du, u + %d, uref + %d);' '\n'],(N-1)*nu, (N-1)*nu)];
-    code = [code, sprintf(['\t' 'Rmul(Ru, du);' '\n'])];
-    code = [code, sprintf(['\t' 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'diffU(du, u + %d, uref + %d);' '\n'],(N-1)*nu, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'Rmul(Ru, du);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'dot_product_nu_nu(&tmp_u,Ru,du);' '\n'])];
 else
-    code = [code, sprintf(['\t' 'Rmul(Ru, u + %d);' '\n'], (N-1)*nu)];
-    code = [code, sprintf(['\t' 'dot_product_nu_nu(&tmp_u,Ru, u + %d);' '\n'],(N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'Rmul(Ru, u + %d);' '\n'], (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'dot_product_nu_nu(&tmp_u,Ru, u + %d);' '\n'],(N-1)*nu)];
 end
 
-code = [code, sprintf(['\t' '(*J) = 0.5*(tmp_x + tmp_u);' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*J) = 0.5*(tmp_x + tmp_u);' '\n'])];
 
 
 info.flops.it.mul = info.flops.it.mul+1;
@@ -2321,65 +2323,65 @@ info.flops.it.add = info.flops.it.add+1;
 
 if o.nw > 0
     if ~o.Jac_u_static
-        code = [code, sprintf(['\t' 'Jacobian_u(x + %d,u + %d, w + %d, G);' '\n'],(N-2)*nx,(N-1)*nu,(N-1)*nw)];
+        code = [code, sprintf([o.indent.generic  'Jacobian_u(x + %d,u + %d, w + %d, G);' '\n'],(N-2)*nx,(N-1)*nu,(N-1)*nw)];
     end
 else
     if ~o.Jac_u_static
-        code = [code, sprintf(['\t' 'Jacobian_u(x + %d,u + %d, G);' '\n'],(N-2)*nx,(N-1)*nu)];
+        code = [code, sprintf([o.indent.generic  'Jacobian_u(x + %d,u + %d, G);' '\n'],(N-2)*nx,(N-1)*nu)];
     end
 end
 
-code = [code, sprintf(['\n' '\t' '/* Start computing dot_J from the bottom */' '\n'])];
-code = [code, sprintf(['\t' 'product_and_sum_nu(dot_J + %d,Px, Ru, G);' '\n\n'], (N-1)*nu)];
+code = [code, sprintf(['\n' o.indent.generic  '/* Start computing dot_J from the bottom */' '\n'])];
+code = [code, sprintf([o.indent.generic  'product_and_sum_nu(dot_J + %d,Px, Ru, G);' '\n\n'], (N-1)*nu)];
 
 if o.terminal
-    code = [code, sprintf(['\t' 'product_contr_nu(&dot_psi_N[%d], Px, G);' '\n\n'], (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'product_contr_nu(&dot_psi_N[%d], Px, G);' '\n\n'], (N-1)*nu)];
 elseif o.contractive
-    code = [code, sprintf(['\t' 'if (ind == %d) ' '\n'...
-        '\t\t' 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
-    code = [code, sprintf(['\t' 'else' '\n'...
-        '\t\t' 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'if (ind == %d) ' '\n'...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'else' '\n'...
+        o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
 end
 
 
 
 if o.contractive
-    code = [code, sprintf(['\t' 'if (ind == %d) ' '\n'...
-        '\t\t' 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
-    code = [code, sprintf(['\t' 'else' '\n'...
-        '\t\t' 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'if (ind == %d) ' '\n'...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'else' '\n'...
+        o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
 end
 
-code = [code, sprintf(['\t' 'for (ii=%d; ii-->0; ) {' '\n'],N-1)];
+code = [code, sprintf([o.indent.generic  'for (ii=%d; ii-->0; ) {' '\n'],N-1)];
 
 if o.nw > 0
     if ~o.Jac_x_static
-        code = [code, sprintf(['\t\t' 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, w + (ii+1)*%d, F);' '\n'],nx,nu,nw)];
+        code = [code, sprintf([o.indent.generic o.indent.generic 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, w + (ii+1)*%d, F);' '\n'],nx,nu,nw)];
         info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
         
     end
 else
     if ~o.Jac_x_static
-        code = [code, sprintf(['\t\t' 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, F);' '\n'],nx,nu)];
+        code = [code, sprintf([o.indent.generic o.indent.generic 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, F);' '\n'],nx,nu)];
         info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
     end
 end
 
 if o.nw > 0
     if ~o.Jac_u_static
-        code = [code, sprintf(['\t\t' 'if (ii==0)' '\n',...
-            '\t\t\t' 'Jacobian_u(x0,u,w,G);' '\n',...
-            '\t\t' 'else' '\n',...
-            '\t\t\t' 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, w + ii*%d, G);' '\n\n'],nx,nu,nw)];
+        code = [code, sprintf([o.indent.generic o.indent.generic 'if (ii==0)' '\n',...
+            o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x0,u,w,G);' '\n',...
+            o.indent.generic o.indent.generic 'else' '\n',...
+            o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, w + ii*%d, G);' '\n\n'],nx,nu,nw)];
         info.flops.it.mul = info.flops.it.mul+ 3*(N-1);
         info.flops.it.comp = info.flops.it.comp+ (N-1);
     end
 else
     if ~o.Jac_u_static
-        code = [code, sprintf(['\t\t' 'if (ii==0)' '\n',...
-            '\t\t\t' 'Jacobian_u(x0,u,G);' '\n',...
-            '\t\t' 'else' '\n',...
-            '\t\t\t' 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, G);' '\n\n'],nx,nu)];
+        code = [code, sprintf([o.indent.generic o.indent.generic 'if (ii==0)' '\n',...
+            o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x0,u,G);' '\n',...
+            o.indent.generic o.indent.generic 'else' '\n',...
+            o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, G);' '\n\n'],nx,nu)];
         info.flops.it.mul = info.flops.it.mul+ 3*(N-1);
         info.flops.it.comp = info.flops.it.comp+ (N-1);
     end
@@ -2387,60 +2389,60 @@ end
 
 
 if trackRef
-    code = [code, sprintf(['\t\t' 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
     info.flops.it.mul = info.flops.it.mul+ 3*(N-1);
-    code = [code, sprintf(['\t\t' 'Qmul(Qx, dx);' '\n'])];
-    code = [code, sprintf(['\t\t' 'dot_product_nx_nx(&tmp_x,Qx,dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Qmul(Qx, dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nx_nx(&tmp_x,Qx,dx);' '\n'])];
 else
-    code = [code, sprintf(['\t\t' 'Qmul(Qx, x + ii*%d);' '\n'], nx)];
-    code = [code, sprintf(['\t\t' 'dot_product_nx_nx(&tmp_x,Qx, x + ii*%d);' '\n'],nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Qmul(Qx, x + ii*%d);' '\n'], nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nx_nx(&tmp_x,Qx, x + ii*%d);' '\n'],nx)];
     info.flops.it.mul = info.flops.it.mul+ (nx+nx)*(N-1);
 end
 
 if trackRef
-    code = [code, sprintf(['\t\t' 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)];
     info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
-    code = [code, sprintf(['\t\t' 'Rmul(Ru, du);' '\n'])];
-    code = [code, sprintf(['\t\t' 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Rmul(Ru, du);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n'])];
 else
-    code = [code, sprintf(['\t\t' 'Rmul(Ru, u + ii*%d);' '\n'], nu)];
-    code = [code, sprintf(['\t\t' 'dot_product_nu_nu(&tmp_u,Ru, u + ii*%d);' '\n'],nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Rmul(Ru, u + ii*%d);' '\n'], nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nu_nu(&tmp_u,Ru, u + ii*%d);' '\n'],nu)];
     info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
 end
 
-code = [code, sprintf(['\n' '\t\t' '/* Increment J */' '\n'])];
-code = [code, sprintf(['\t\t' '(*J) += .50*(tmp_x + tmp_u);' '\n\n'])];
+code = [code, sprintf(['\n' o.indent.generic o.indent.generic '/* Increment J */' '\n'])];
+code = [code, sprintf([o.indent.generic o.indent.generic '(*J) += .50*(tmp_x + tmp_u);' '\n\n'])];
 info.flop.it.mul = info.flops.it.mul+1*(N-1);
 info.flops.it.add = info.flops.it.add+2*(N-1);
 
 
 
 if o.terminal
-    code = [code, sprintf(['\t\t' 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
-        '\t\t' 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
-        '\t\t' 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n\n'], nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
+        o.indent.generic o.indent.generic 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n\n'], nu)];
 end
 
 if o.contractive
-    code = [code, sprintf(['\t\t' 'index = ind - ii - 1;' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'index = ind - ii - 1;' '\n'])];
     
-    code = [code, sprintf(['\t\t' 'if ( index >= 0){' '\n',...
-        '\t\t\t' 'if (index > 0){' '\n',...
-        '\t\t\t\t' 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
-        '\t\t\t\t' 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
-        '\t\t\t' '}' '\n',...
-        '\t\t\t' 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n'...
-        '\t\t' '}' '\n'], nu)];
-    code = [code, sprintf(['\t\t' 'else' '\n',...
-        '\t\t\t' 'set_zero_nu(&dot_psi_N[ii*%d]);' '\n\n'],nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'if ( index >= 0){' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'if (index > 0){' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n'...
+        o.indent.generic o.indent.generic '}' '\n'], nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'else' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[ii*%d]);' '\n\n'],nu)];
     
 end
 
-code = [code, sprintf(['\n' '\t\t' '/* Compute dot_J */' '\n'])];
-code = [code, sprintf(['\t\t' 'product_and_sum_nx(mem_tmp2, Px, Qx, F);' '\n',...
-    '\t\t' 'copy_nx(Px,mem_tmp2);' '\n',...
-    '\t\t' 'product_and_sum_nu(dot_J + ii*%d, Px, Ru, G);' '\n',...
-    '\t' '}' '\n',...
+code = [code, sprintf(['\n' o.indent.generic o.indent.generic '/* Compute dot_J */' '\n'])];
+code = [code, sprintf([o.indent.generic o.indent.generic 'product_and_sum_nx(mem_tmp2, Px, Qx, F);' '\n',...
+    o.indent.generic o.indent.generic 'copy_nx(Px,mem_tmp2);' '\n',...
+    o.indent.generic o.indent.generic 'product_and_sum_nu(dot_J + ii*%d, Px, Ru, G);' '\n',...
+    o.indent.generic  '}' '\n',...
     '}' '\n\n'],nu)];
 info.flops.it.mul = info.flops.it.mul+ 1*(N-1);
 
@@ -2452,85 +2454,85 @@ code = [code, sprintf([o.inline ' void det_J(const ' o.real '* x0, const ' o.rea
     o.real '* J' c_psi_dec '){' '\n\n',...
     ])];
 
-code = [code, sprintf(['\t' o.real ' Qx[%d], Ru[%d], tmp_x = 0.0, tmp_u = 0.0;' '\n'],...
+code = [code, sprintf([o.indent.generic  o.real ' Qx[%d], Ru[%d], tmp_x = 0.0, tmp_u = 0.0;' '\n'],...
     nx,nu)];
 if trackRef
-    code = [code, sprintf(['\t' o.real ' dx[%d], du[%d];' '\n'],...
+    code = [code, sprintf([o.indent.generic  o.real ' dx[%d], du[%d];' '\n'],...
         nx,nu)];
 end
 if o.contractive
-    code = [code, sprintf(['\t' o.real ' Px_contr[%d], tmp_contr = 0.0;' '\n'], nx)];
+    code = [code, sprintf([o.indent.generic  o.real ' Px_contr[%d], tmp_contr = 0.0;' '\n'], nx)];
     if trackRef
-        code = [code, sprintf(['\t' o.real ' dx_contr[%d];' '\n'], nx)];
+        code = [code, sprintf([o.indent.generic  o.real ' dx_contr[%d];' '\n'], nx)];
     end
 end
 
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
 if trackRef
-    code = [code, sprintf(['\t' 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
-    code = [code, sprintf(['\t' 'Pmul(Qx, dx);' '\n'])];
-    code = [code, sprintf(['\t' 'dot_product_nx_nx(&tmp_x,Qx, dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'Pmul(Qx, dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'dot_product_nx_nx(&tmp_x,Qx, dx);' '\n'])];
     if o.contractive
-        code = [code, sprintf(['\t' 'diffX(dx_contr, x + (ind - 1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
-        code = [code, sprintf(['\t' 'Pmul(Px_contr, dx_contr);' '\n'...
-            '\t' 'dot_product_nx_nx(&tmp_contr,Px_contr,dx_contr);' '\n',...
-            '\t' '(*psi_N) = 0.5*tmp_contr;' '\n'])];
+        code = [code, sprintf([o.indent.generic  'diffX(dx_contr, x + (ind - 1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
+        code = [code, sprintf([o.indent.generic  'Pmul(Px_contr, dx_contr);' '\n'...
+            o.indent.generic  'dot_product_nx_nx(&tmp_contr,Px_contr,dx_contr);' '\n',...
+            o.indent.generic  '(*psi_N) = 0.5*tmp_contr;' '\n'])];
     end
 else
-    code = [code, sprintf(['\t' 'Pmul(Qx, x + %d);' '\n'], (N-1)*nx)];
-    code = [code, sprintf(['\t' 'dot_product_nx_nx(&tmp_x,Qx, x + %d);' '\n'],(N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'Pmul(Qx, x + %d);' '\n'], (N-1)*nx)];
+    code = [code, sprintf([o.indent.generic  'dot_product_nx_nx(&tmp_x,Qx, x + %d);' '\n'],(N-1)*nx)];
     if o.contractive
-        code = [code, sprintf(['\t' 'Pmul(Px_contr, x+ (ind - 1)*%d);' '\n'...
-            '\t' 'dot_product_nx_nx(&tmp_contr,Px_contr,x+ (ind - 1)*%d);' '\n',...
-            '\t' '(*psi_N) = 0.5*tmp_contr;' '\n'],nx,nx)];
+        code = [code, sprintf([o.indent.generic  'Pmul(Px_contr, x+ (ind - 1)*%d);' '\n'...
+            o.indent.generic  'dot_product_nx_nx(&tmp_contr,Px_contr,x+ (ind - 1)*%d);' '\n',...
+            o.indent.generic  '(*psi_N) = 0.5*tmp_contr;' '\n'],nx,nx)];
     end
 end
 
 if o.terminal
-    code = [code, sprintf(['\t' '(*psi_N) = 0.5*tmp_x;' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*psi_N) = 0.5*tmp_x;' '\n'])];
 end
 
 if trackRef
-    code = [code, sprintf(['\t' 'diffU(du, u + %d, uref + %d);' '\n'],(N-1)*nu, (N-1)*nu)];
-    code = [code, sprintf(['\t' 'Rmul(Ru, du);' '\n'])];
-    code = [code, sprintf(['\t' 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n\n'])];
+    code = [code, sprintf([o.indent.generic  'diffU(du, u + %d, uref + %d);' '\n'],(N-1)*nu, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'Rmul(Ru, du);' '\n'])];
+    code = [code, sprintf([o.indent.generic  'dot_product_nu_nu(&tmp_u,Ru,du);' '\n\n'])];
 else
-    code = [code, sprintf(['\t' 'Rmul(Ru, u + %d);' '\n'], (N-1)*nu)];
-    code = [code, sprintf(['\t' 'dot_product_nu_nu(&tmp_u,Ru, u + %d);' '\n\n'],(N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'Rmul(Ru, u + %d);' '\n'], (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic  'dot_product_nu_nu(&tmp_u,Ru, u + %d);' '\n\n'],(N-1)*nu)];
 end
 
-code = [code, sprintf(['\t' '(*J) = 0.5*(tmp_x + tmp_u);' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*J) = 0.5*(tmp_x + tmp_u);' '\n'])];
 info.flops.ls.mul = info.flops.ls.mul+1;
 info.flops.ls.add = info.flops.ls.add+1;
 
-code = [code, sprintf(['\t' 'for (ii=%d; ii-->0; ) {' '\n\n'],N-1)];
+code = [code, sprintf([o.indent.generic  'for (ii=%d; ii-->0; ) {' '\n\n'],N-1)];
 
 if trackRef
-    code = [code, sprintf(['\t\t' 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
     info.flops.ls.mul = info.flops.ls.mul+ 2*(N-1);
-    code = [code, sprintf(['\t\t' 'Qmul(Qx, dx);' '\n'])];
-    code = [code, sprintf(['\t\t' 'dot_product_nx_nx(&tmp_x,Qx,dx);' '\n\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Qmul(Qx, dx);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nx_nx(&tmp_x,Qx,dx);' '\n\n'])];
 else
-    code = [code, sprintf(['\t\t' 'Qmul(Qx, x + ii*%d);' '\n'], nx)];
-    code = [code, sprintf(['\t\t' 'dot_product_nx_nx(&tmp_x,Qx, x + ii*%d);' '\n\n'],nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Qmul(Qx, x + ii*%d);' '\n'], nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nx_nx(&tmp_x,Qx, x + ii*%d);' '\n\n'],nx)];
     info.flops.ls.mul = info.flops.ls.mul+ 2*(N-1);
 end
 
 if trackRef
-    code = [code, sprintf(['\t\t' 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)];
     info.flops.ls.mul = info.flops.ls.mul+ 2*(N-1);
-    code = [code, sprintf(['\t\t' 'Rmul(Ru, du);' '\n'])];
-    code = [code, sprintf(['\t\t' 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Rmul(Ru, du);' '\n'])];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nu_nu(&tmp_u,Ru,du);' '\n\n'])];
 else
-    code = [code, sprintf(['\t\t' 'Rmul(Ru, u + ii*%d);' '\n'], nu)];
-    code = [code, sprintf(['\t\t' 'dot_product_nu_nu(&tmp_u,Ru, u + ii*%d);' '\n\n'],nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'Rmul(Ru, u + ii*%d);' '\n'], nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'dot_product_nu_nu(&tmp_u,Ru, u + ii*%d);' '\n\n'],nu)];
     info.flops.ls.mul = info.flops.ls.mul+ 2*(N-1);
 end
 
 
-code = [code, sprintf(['\t\t' '(*J) += .5*(tmp_x + tmp_u);' '\n'...
-    '\t' '}' '\n'...
+code = [code, sprintf([o.indent.generic o.indent.generic '(*J) += .5*(tmp_x + tmp_u);' '\n'...
+    o.indent.generic  '}' '\n'...
     '}' '\n\n'])];
 
 info.flops.ls.mul = info.flops.ls.mul+ 1*(N-1);
@@ -2632,7 +2634,7 @@ if o.contractive
     code =  [code, sprintf(['void set_zero_nu (' o.real '* x){\n\n'])];
     
     for jj=0:nu-1
-        code =  [code, sprintf(['\t' 'x[%d] = 0.0;' '\n'],jj)]; %#ok
+        code =  [code, sprintf([o.indent.generic  'x[%d] = 0.0;' '\n'],jj)]; %#ok
     end
     
     code =  [code, sprintf(['\n\n' '}' '\n\n'])];
@@ -2727,28 +2729,28 @@ if ~isempty(o.K_n)
 end
 code = [code,  sprintf(['const unsigned int nc, const unsigned int na, '...
     'const unsigned int nb, ' o.real '* sl, ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'...
-    '\t' 'unsigned int jj;' '\n\n'])];
+    o.indent.generic  'unsigned int jj;' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code,  sprintf(['\t' 'for (jj=0;jj< na;jj++){' '\n',...
-        '\t\t' 'sl_sqr[jj] = ' o.max '(1.0, -2.0* amu[jj]);' '\n',...
-        '\t\t' 'gps[jj]= amu[jj] + 0.5*sl_sqr[jj];' '\n',...
-        '\t\t' 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj=0;jj< na;jj++){' '\n',...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* amu[jj]);' '\n',...
+        o.indent.generic o.indent.generic 'gps[jj]= amu[jj] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_ub)
-    code = [code,  sprintf(['\t' 'for (jj=na;jj< nb;jj++){' '\n'...
-        '\t\t' 'sl_sqr[jj] = ' o.max '(1.0, -2.0* umb[jj-na]);' '\n',...
-        '\t\t' 'gps[jj]= umb[jj-na] + 0.5*sl_sqr[jj];' '\n',...
-        '\t\t' 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj=na;jj< nb;jj++){' '\n'...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* umb[jj-na]);' '\n',...
+        o.indent.generic o.indent.generic 'gps[jj]= umb[jj-na] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_n)
-    code = [code,  sprintf(['\t' 'for (jj= nb;jj< nc;jj++) {' '\n'...
-        '\t\t' 'sl_sqr[jj] = ' o.max '(1.0, -2.0* n[jj - nb]);' '\n',...
-        '\t\t' 'gps[jj]= n[jj - nb] + 0.5*sl_sqr[jj];' '\n',...
-        '\t\t' 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj= nb;jj< nc;jj++) {' '\n'...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* n[jj - nb]);' '\n',...
+        o.indent.generic o.indent.generic 'gps[jj]= n[jj - nb] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 
 code = [code,  sprintf(['}' '\n\n'])];
@@ -2758,17 +2760,17 @@ code = [code, sprintf(['\n' '/* It initialize the slack variables sl and its squ
 code = [code, sprintf([o.inline ' void initialize_slack( const ' o.real '* u' c_psi_dec c_contr_dec ', ' o.real '* sl, ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code, sprintf(['\t'  o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
 end
 if ~isempty(o.K_ub)
-    code = [code, sprintf(['\t'  o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf(['\t'  o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
+    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
 end
 
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' o.real ' g_contr = 0.0;' '\n'])];
+    code = [code, sprintf([o.indent.generic  o.real ' g_contr = 0.0;' '\n'])];
 end
 
 info.flops.mul = info.flops.mul+ N*3; % mul inside only first cycle % NOT CLEAR, ToDo
@@ -2779,17 +2781,17 @@ ub = sum(~isinf(o.box_upperBound),1);
 
 for k = 1:o.N
     code = [code, sprintf(['\n'...
-        '\t' '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N - 1)];   %#ok
+        o.indent.generic  '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N - 1)];   %#ok
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' 'build_amu(&u[%i], %i, &amu[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
+        code = [code, sprintf([o.indent.generic  'build_amu(&u[%i], %i, &amu[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' 'build_umb(&u[%i],%i,&umb[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
+        code = [code, sprintf([o.indent.generic  'build_umb(&u[%i],%i,&umb[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' 'build_n(&u[%i],%i,&n[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
+        code = [code, sprintf([o.indent.generic  'build_n(&u[%i],%i,&n[0]);' '\n'],o.nu*(k-1),k-1)];%#ok
     end
-    code = [code, sprintf(['\t' 'build_sl_slsqr('])]; %#ok
+    code = [code, sprintf([o.indent.generic  'build_sl_slsqr('])]; %#ok
     if ~isempty(o.K_lb)
         code = [code, sprintf([' &amu[0], '])]; %#ok
     end
@@ -2805,10 +2807,10 @@ for k = 1:o.N
 end
 
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' 'g_contr = *psi_N - c_contr;' '\n'...
-        '\t' 'sl_sqr[%d] = ' o.max '(1.0, -2.0*g_contr);' '\n',...
-        '\t' 'sl[%d] = ' o.sqrt '(sl_sqr[%d]);' '\n'...
-        '\t' 'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
+    code = [code, sprintf([o.indent.generic  'g_contr = *psi_N - c_contr;' '\n'...
+        o.indent.generic  'sl_sqr[%d] = ' o.max '(1.0, -2.0*g_contr);' '\n',...
+        o.indent.generic  'sl[%d] = ' o.sqrt '(sl_sqr[%d]);' '\n'...
+        o.indent.generic  'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
         sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc)-1, sum(o.nc)-1)];
     info.flops.add = info.flops.add + 1;
 end
@@ -2861,10 +2863,10 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void build_vNnc_lb(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_lb{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -2888,10 +2890,10 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void build_vNnc_ub(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_ub)
-        code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_ub{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])]; 
 end
@@ -2926,20 +2928,20 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void Dntop_times_dotJ_n(const ' o.real '* Dn, '...
         'const ' o.real '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_n{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'Dntop_times_dotJ_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'Dntop_times_dotJ_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
     
     code = [code, sprintf([ o.inline ' void build_vNnc_n(const ' o.real '* gps, '...
         'const ' o.real '* temp_n, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_n{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -2980,10 +2982,10 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void minus_Ina_muG(const ' o.real '* muG, '...
         'const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_lb{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'minus_Ina_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'minus_Ina_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])]; 
 end
@@ -3006,10 +3008,10 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void Inb_muG(const ' o.real '* muG, '...
         'const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_ub)
-        code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_ub{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'Inb_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'Inb_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3034,10 +3036,10 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void Dn_times_muG_n(const ' o.real '* Dn, '...
         'const ' o.real '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
+        code = [code, generateCheck_custom(o.K_n{jj}, o.indent.generic , 'k'),...
             sprintf(['\n',...
-            '\t\t' 'Dn_times_muG_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+            o.indent.generic o.indent.generic 'Dn_times_muG_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3074,9 +3076,9 @@ for jj=1:length(o.K_nc)
     
     code = [code, sprintf([o.inline ' void product_matlab_nc_' num2str(jj) '(const ' o.real '* x, const '...
         o.real '* y, ' o.real '* z){' '\n\n',...
-        '\t' 'unsigned int ii=0;' '\n\n',...
-        '\t' 'for (ii=0;ii<%d;ii++)' '\n',...
-        '\t\t' 'z[ii] = x[ii]*y[ii];' '\n\n',...
+        o.indent.generic  'unsigned int ii=0;' '\n\n',...
+        o.indent.generic  'for (ii=0;ii<%d;ii++)' '\n',...
+        o.indent.generic o.indent.generic 'z[ii] = x[ii]*y[ii];' '\n\n',...
         '}' '\n'],o.nc(o.K_nc{jj}(1)) )]; %#ok
     info.flops.mul = info.flops.mul+ o.nc(o.K_nc{jj}(1));
 end
@@ -3084,18 +3086,18 @@ if ~isempty(o.K_nc)
     code = [code, sprintf([o.inline ' void minus_scale_nc(const ' o.real ...
         '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj = 1:length(o.K_nc)
-        check = generateCheck_custom(o.K_nc{jj}, '\t', 'k' );
-        code = [code, sprintf([check, '\n' '\t\t' 'minus_scale_nc_%i( &res[0], &x[0]);' '\n'], jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+        check = generateCheck_custom(o.K_nc{jj}, o.indent.generic , 'k' );
+        code = [code, sprintf([check, '\n' o.indent.generic o.indent.generic 'minus_scale_nc_%i( &res[0], &x[0]);' '\n'], jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
     
     code = [code, sprintf([o.inline ' void product_matlab_nc(const ' o.real ...
         '* x, const ' o.real '* y, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj = 1:length(o.K_nc)
-        check = generateCheck_custom(o.K_nc{jj}, '\t', 'k' );
-        code = [code, sprintf([check, '\n' '\t\t' 'product_matlab_nc_%i(&x[0], &y[0], &res[0]);' '\n'], jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
+        check = generateCheck_custom(o.K_nc{jj}, o.indent.generic , 'k' );
+        code = [code, sprintf([check, '\n' o.indent.generic o.indent.generic 'product_matlab_nc_%i(&x[0], &y[0], &res[0]);' '\n'], jj)]; %#ok
+        code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3110,7 +3112,7 @@ info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 % Gradient step function
 code = [code, sprintf(['\n' '/* Gradient step function */' '\n'])];
 code = [code, sprintf([o.inline ' void gradient_step(const ' o.real '* dot_J, const ' o.real '* u, const ' o.real '* sl,' '\n',...
-    '\t' 'const ' o.real '* sl_sqr, const ' o.real '* gps' c_psi_dot_dec ', ' o.real '* du, ' o.real '* dsl, ' o.real '* muG){' '\n\n'])];
+    o.indent.generic  'const ' o.real '* sl_sqr, const ' o.real '* gps' c_psi_dot_dec ', ' o.real '* du, ' o.real '* dsl, ' o.real '* muG){' '\n\n'])];
 
 if ~isempty(o.Jac_n_struct)
     
@@ -3121,20 +3123,20 @@ if ~isempty(o.Jac_n_struct)
         size_Dn = size_Dn + current_size_Dn;
     end
     
-    code = [code, sprintf(['\t' o.real ' Dn[%d];' '\n'],size_Dn)];
+    code = [code, sprintf([o.indent.generic  o.real ' Dn[%d];' '\n'],size_Dn)];
 end
 
-code = [code, sprintf(['\t' o.real ' v_Nnc[%d], tmp_nu[%d], tmp_nc_m[%d], tmp_contr = 0.0;' '\n'],...
+code = [code, sprintf([o.indent.generic  o.real ' v_Nnc[%d], tmp_nu[%d], tmp_nc_m[%d], tmp_contr = 0.0;' '\n'],...
     sum(o.nc), nu, max(o.nc))];
 
 if ~isempty(o.K_lb)
-    code = [code, sprintf(['\t' o.real ' temp_lb[%i];' '\n'],o.nu)];
+    code = [code, sprintf([o.indent.generic  o.real ' temp_lb[%i];' '\n'],o.nu)];
 end
 if ~isempty(o.K_ub)
-    code = [code, sprintf(['\t' o.real ' temp_ub[%i];' '\n'],o.nu)];
+    code = [code, sprintf([o.indent.generic  o.real ' temp_ub[%i];' '\n'],o.nu)];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf(['\t' o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(cell2mat(o.nn)), o.nu)];
+    code = [code, sprintf([o.indent.generic  o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(cell2mat(o.nn)), o.nu)];
 end
 
 
@@ -3142,26 +3144,26 @@ Dn_need = 0;
 Dn_need_vec = zeros(1,o.N);
 for ii = 1:o.N
     
-    code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
+    code = [code, sprintf(['\n' o.indent.generic  '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
     lb_size = 0;
     ub_size = 0;
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' 'build_vNnc_lb(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'build_vNnc_lb(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
             sum(o.nc(1:ii-1)), (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)))]; %#ok
         lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' 'build_vNnc_ub(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'build_vNnc_ub(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
             sum(o.nc(1:ii-1)) + lb_size, (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)) + lb_size )]; %#ok
         ub_size = sum(~isinf(o.box_upperBound(:,ii)));
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' 'build_Dn(&u[%d], %i, &Dn[%d]);' '\n'], (ii-1)*nu, ii-1, Dn_need)]; %#ok
+        code = [code, sprintf([o.indent.generic  'build_Dn(&u[%d], %i, &Dn[%d]);' '\n'], (ii-1)*nu, ii-1, Dn_need)]; %#ok
         
-        code = [code, sprintf(['\t' 'Dntop_times_dotJ_n(&Dn[%i], &dot_J[%i], %i, &temp_n[0]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'Dntop_times_dotJ_n(&Dn[%i], &dot_J[%i], %i, &temp_n[0]);' '\n'],...
             Dn_need, (ii-1)*o.nu, ii-1)]; %#ok
         
-        code = [code, sprintf(['\t' 'build_vNnc_n(&gps[%i], &temp_n[0], %i, &v_Nnc[%i]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'build_vNnc_n(&gps[%i], &temp_n[0], %i, &v_Nnc[%i]);' '\n'],...
             sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1, sum(o.nc(1:ii-1)) + lb_size + ub_size )]; %#ok
         
         
@@ -3172,11 +3174,11 @@ for ii = 1:o.N
 end
 
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-        '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+    code = [code, sprintf([o.indent.generic  'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
+        o.indent.generic  'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
 end
 
-code = [code, sprintf(['\n' '\t' 'solveConstraintSystem(&muG[0], '])];
+code = [code, sprintf(['\n' o.indent.generic  'solveConstraintSystem(&muG[0], '])];
 if ~isempty(o.K_n)
     code = [code, sprintf('&Dn[0], ')];
 end
@@ -3186,25 +3188,25 @@ end
 code = [code, sprintf(['&v_Nnc[0], &sl_sqr[0]);' '\n'])];
 
 for ii = 1:o.N
-    code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
+    code = [code, sprintf(['\n' o.indent.generic  '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
     lb_size = 0;
     ub_size = 0;
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' 'minus_Ina_muG(&muG[%i], %i, &temp_lb[0]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'minus_Ina_muG(&muG[%i], %i, &temp_lb[0]);' '\n'],...
             sum(o.nc(1:ii-1)), ii-1)]; %#ok
         lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' 'Inb_muG(&muG[%i], %i, &temp_ub[0]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'Inb_muG(&muG[%i], %i, &temp_ub[0]);' '\n'],...
             sum(o.nc(1:ii-1)) + lb_size, ii-1)]; %#ok
         ub_size = sum(~isinf(o.box_upperBound(:,ii)));
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' 'Dn_times_muG_n(&Dn[%i], &muG[%i], %i, &temp_n2[0]);' '\n'],...
+        code = [code, sprintf([o.indent.generic  'Dn_times_muG_n(&Dn[%i], &muG[%i], %i, &temp_n2[0]);' '\n'],...
             Dn_need_vec(ii) - Dn_need_vec(1), sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1)]; %#ok
     end
     
-    code = [code, sprintf(['\t' 'sum_nr_constr(&tmp_nu[0]'])]; %#ok
+    code = [code, sprintf([o.indent.generic  'sum_nr_constr(&tmp_nu[0]'])]; %#ok
     
     if ~isempty(o.K_lb)
         code = [code, ', &temp_lb[0]']; %#ok
@@ -3218,20 +3220,20 @@ for ii = 1:o.N
     code = [code, sprintf([', &dot_J[%i]);' '\n'], nu*(ii-1))]; %#ok
     
     if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
+        code = [code, sprintf([o.indent.generic  'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
             '\n'], nu*(ii-1), sum(o.nc) - 1)]; %#ok
     end
     
-    code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
+    code = [code, sprintf([o.indent.generic  'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
         '\n'],(ii-1)*nu)]; %#ok
     
-    code = [code, sprintf(['\t' 'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
+    code = [code, sprintf([o.indent.generic  'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
         '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )]; %#ok
-    code = [code, sprintf(['\t' 'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
+    code = [code, sprintf([o.indent.generic  'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
         '\n'], ii-1, sum(o.nc(1:ii-1)) )]; %#ok
 end
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+    code = [code, sprintf([o.indent.generic  'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
 end
 
 code = [code, sprintf(['}' '\n\n'])];
@@ -3266,22 +3268,22 @@ if ~isempty(o.K_n)
 end
 code = [code,  sprintf(['const unsigned int nc, const unsigned int na, '...
     'const unsigned int nb, const ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'...
-    '\t' 'unsigned int jj;' '\n\n'])];
+    o.indent.generic  'unsigned int jj;' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code,  sprintf(['\t' 'for (jj=0;jj< na;jj++){' '\n',...
-        '\t\t' 'gps[jj]= amu[jj] + 0.5*sl_sqr[jj];' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj=0;jj< na;jj++){' '\n',...
+        o.indent.generic o.indent.generic 'gps[jj]= amu[jj] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_ub)
-    code = [code,  sprintf(['\t' 'for (jj=na;jj< nb;jj++){' '\n'...
-        '\t\t' 'gps[jj]= umb[jj-na] + 0.5*sl_sqr[jj];' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj=na;jj< nb;jj++){' '\n'...
+        o.indent.generic o.indent.generic 'gps[jj]= umb[jj-na] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_n)
-    code = [code,  sprintf(['\t' 'for (jj= nb;jj< nc;jj++) {' '\n'...
-        '\t\t' 'gps[jj]= n[jj - nb] + 0.5*sl_sqr[jj];' '\n',...
-        '\t' '}' '\n'])];
+    code = [code,  sprintf([o.indent.generic  'for (jj= nb;jj< nc;jj++) {' '\n'...
+        o.indent.generic o.indent.generic 'gps[jj]= n[jj - nb] + 0.5*sl_sqr[jj];' '\n',...
+        o.indent.generic  '}' '\n'])];
 end
 code = [code,  sprintf(['}' '\n\n'])];
 
@@ -3290,17 +3292,17 @@ code = [code, sprintf([o.inline ' void build_gpsl(const ' o.real '* u' c_psi_dec
     c_contr_dec ', const ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code, sprintf(['\t'  o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
 end
 if ~isempty(o.K_ub)
-    code = [code, sprintf(['\t'  o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf(['\t'  o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
+    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
 end
 
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' o.real ' g_contr = 0.0;' '\n'])];
+    code = [code, sprintf([o.indent.generic  o.real ' g_contr = 0.0;' '\n'])];
 end
 
 
@@ -3312,18 +3314,18 @@ ub = sum(~isinf(o.box_upperBound),1);
 
 for k = 1:o.N
     code = [code, sprintf(['\n',...
-        '\t' '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N -1)]; %#ok
+        o.indent.generic  '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N -1)]; %#ok
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' 'build_amu(&u[%i],%i,&amu[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
+        code = [code, sprintf([o.indent.generic  'build_amu(&u[%i],%i,&amu[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' 'build_umb(&u[%i],%i,&umb[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
+        code = [code, sprintf([o.indent.generic  'build_umb(&u[%i],%i,&umb[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' 'build_n(&u[%i],%i,&n[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
+        code = [code, sprintf([o.indent.generic  'build_n(&u[%i],%i,&n[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     
-    code = [code, sprintf(['\t' 'build_gpsl_lowLevel('])]; %#ok
+    code = [code, sprintf([o.indent.generic  'build_gpsl_lowLevel('])]; %#ok
     if ~isempty(o.K_lb)
         code = [code, sprintf([' &amu[0], '])]; %#ok
     end
@@ -3341,8 +3343,8 @@ end
 code = [code, sprintf('\n')];
 
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['\t' 'g_contr = *psi_N - c_contr;' '\n'...
-        '\t' 'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
+    code = [code, sprintf([o.indent.generic  'g_contr = *psi_N - c_contr;' '\n'...
+        o.indent.generic  'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
         sum(o.nc)-1, sum(o.nc)-1)];
     info.flops.add = info.flops.add + 1;
 end
@@ -3359,10 +3361,10 @@ info.flops.mul = info.flops.mul+ 3*N;
 code = [code, sprintf(['\n' '/* It computes x_sqr = x.*x */' '\n'])];
 code = [code, sprintf([o.inline ' void build_sqr_Nnc( const ' o.real ' *x, ' o.real ' *x_sqr){' '\n\n'])];
 
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'for (ii=0;ii<%d;ii++)' '\n',...
-    '\t\t' 'x_sqr[ii] = x[ii]*x[ii];' '\n',...
+code = [code, sprintf([o.indent.generic  'for (ii=0;ii<%d;ii++)' '\n',...
+    o.indent.generic o.indent.generic 'x_sqr[ii] = x[ii]*x[ii];' '\n',...
     '}' '\n\n'],sum(o.nc))];
 
 info.flops.mul = info.flops.mul+ sum(o.nc);
@@ -3523,19 +3525,19 @@ code = [code, sprintf(['\n' '/* It computes the merit function phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_phi (const ' o.real ' J, const ' o.real '* gps, const ',...
     o.real '* mu, const ' o.real ' rho, ' o.real '* phi){' '\n\n'])];
 
-code = [code, sprintf(['\t' o.real ' tmp[%d], pr = 0.0;' '\n'],sum(o.nc))];
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  o.real ' tmp[%d], pr = 0.0;' '\n'],sum(o.nc))];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'for (ii=%d; ii--; )' '\n'], sum(o.nc))];
-code = [code, sprintf(['\t\t' 'tmp[ii] = mu[ii] + 0.50*rho*gps[ii];' '\n'], sum(o.nc))];
+code = [code, sprintf([o.indent.generic  'for (ii=%d; ii--; )' '\n'], sum(o.nc))];
+code = [code, sprintf([o.indent.generic o.indent.generic 'tmp[ii] = mu[ii] + 0.50*rho*gps[ii];' '\n'], sum(o.nc))];
 info.flops.mul = info.flops.mul+ 2*sum(o.nc);
 info.flops.add = info.flops.add+ sum(o.nc);
 
-code = [code, sprintf(['\t' 'dot_product_Nnc(&pr, gps,tmp);' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'dot_product_Nnc(&pr, gps,tmp);' '\n\n'])];
 info.flops.add = info.flops.add+ (sum(o.nc)-1); % addition of dot_product_Nnc
 info.flops.mul = info.flops.mul+ sum(o.nc); % multiplication of dot_product_Nnc
 
-code = [code, sprintf(['\t' '(*phi) = J + pr;' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*phi) = J + pr;' '\n'])];
 info.flops.add = info.flops.add+ sum(o.nc);
 code = [code, sprintf(['}' '\n\n'])];
 
@@ -3549,23 +3551,23 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 code = [code, sprintf(['\n' '/* It computes the derivative of the merit function dot_phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_dot_phi (const ' o.real '* du, const ' o.real '* DJ, const ' ...
     o.real ' rho, const '  o.real '* gps, ' '\n',...
-    '\t const ' o.real '* mu, const ' o.real '* dm, ' o.real '* dot_phi){' '\n\n'])];
+    o.indent.generic ' const ' o.real '* mu, const ' o.real '* dm, ' o.real '* dot_phi){' '\n\n'])];
 
-code = [code, sprintf(['\t' o.real ' tmp_prod[%d], prod_1 = 0.0, prod_2 = 0.0;' '\n'],sum(o.nc))];
-code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  o.real ' tmp_prod[%d], prod_1 = 0.0, prod_2 = 0.0;' '\n'],sum(o.nc))];
+code = [code, sprintf([o.indent.generic  'unsigned int ii = 0;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'for (ii=%d; ii--; )' '\n'], sum(o.nc))];
-code = [code, sprintf(['\t\t' 'tmp_prod[ii] = mu[ii] - dm[ii] + rho*gps[ii];' '\n'], sum(o.nc))];
+code = [code, sprintf([o.indent.generic  'for (ii=%d; ii--; )' '\n'], sum(o.nc))];
+code = [code, sprintf([o.indent.generic o.indent.generic 'tmp_prod[ii] = mu[ii] - dm[ii] + rho*gps[ii];' '\n'], sum(o.nc))];
 info.flops.mul = info.flops.mul+ sum(o.nc);
 info.flops.add = info.flops.add+ 2*sum(o.nc);
 
-code = [code, sprintf(['\t' 'dot_product_Nnu(&prod_1, du, DJ);' '\n\n'])];
-code = [code, sprintf(['\t' 'dot_product_Nnc(&prod_2, gps,tmp_prod);' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'dot_product_Nnu(&prod_1, du, DJ);' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'dot_product_Nnc(&prod_2, gps,tmp_prod);' '\n\n'])];
 
 info.flops.add = info.flops.add+ o.N*(o.nu + sum(o.nc) - 1); % additions of dot_product_Nnc and _Nnu
 info.flops.mul = info.flops.mul+ o.N*(o.nu + sum(o.nc)); % multiplications of dot_product_Nnc and _Nnu
 
-code = [code, sprintf(['\t' '(*dot_phi) = prod_1 - prod_2;' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*dot_phi) = prod_1 - prod_2;' '\n'])];
 
 info.flops.add = info.flops.add+ 1;
 code = [code, sprintf(['}' '\n\n'])];
@@ -3581,13 +3583,13 @@ alpha = o.stepSize;
 code = [code, sprintf(['\n' '/* It checks the decrease condition of the merit function */' '\n'])];
 code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real ' dot_phi, const ' o.real ' du_sqr, const ' ...
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
-code = [code, sprintf(['\t' 'unsigned int res = 2;' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'unsigned int res = 2;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'if (dot_phi <= ' falcopt.internal.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
-code = [code, sprintf(['\t\t' 'res = 1;' '\n',...
-    '\t' 'else' '\n',...
-    '\t\t' 'res = 0;' '\n\n',...
-    '\t' 'return res;' '\n'...
+code = [code, sprintf([o.indent.generic  'if (dot_phi <= ' falcopt.internal.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
+code = [code, sprintf([o.indent.generic o.indent.generic 'res = 1;' '\n',...
+    o.indent.generic  'else' '\n',...
+    o.indent.generic o.indent.generic 'res = 0;' '\n\n',...
+    o.indent.generic  'return res;' '\n'...
     '}' '\n\n' ])];
 info.flops.add = info.flops.add+ 1;
 info.flops.comp = info.flops.comp +1;
@@ -3608,37 +3610,37 @@ if o.merit_function ~= 2
     
     code = [code, sprintf(['\n' '/* one_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' one_norm (const ' o.real '* g){' '\n\n',...
-        '\t' 'int ii = 0;' '\n'...
-        '\t' o.real ' norm = 0.0;' '\n\n',...
-        '\t' 'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
+        o.indent.generic  'int ii = 0;' '\n'...
+        o.indent.generic  o.real ' norm = 0.0;' '\n\n',...
+        o.indent.generic  'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
     
-    code = [code, sprintf(['\t\t' 'norm += ' o.abs '(g[ii]);' '\n',...
-        '\t' '}' '\n',...
-        '\t' 'return norm;' '\n',...
+    code = [code, sprintf([o.indent.generic o.indent.generic 'norm += ' o.abs '(g[ii]);' '\n',...
+        o.indent.generic  '}' '\n',...
+        o.indent.generic  'return norm;' '\n',...
         '}' '\n\n'])];
     
     code = [code, sprintf(['\n' '/* inf_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' inf_norm (const ' o.real '* g){' '\n\n',...
-        '\t' 'int ii = 0;' '\n'...
-        '\t' o.real ' norm = 0.0;' '\n\n',...
-        '\t' 'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
+        o.indent.generic  'int ii = 0;' '\n'...
+        o.indent.generic  o.real ' norm = 0.0;' '\n\n',...
+        o.indent.generic  'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
     
-    code = [code, sprintf(['\t\t' 'norm = ' o.max '(norm,' o.abs '(g[ii]));' '\n',...
-        '\t' '}' '\n',...
-        '\t' 'return norm;' '\n',...
+    code = [code, sprintf([o.indent.generic o.indent.generic 'norm = ' o.max '(norm,' o.abs '(g[ii]));' '\n',...
+        o.indent.generic  '}' '\n',...
+        o.indent.generic  'return norm;' '\n',...
         '}' '\n\n'])];
     
 else
     code = [code, sprintf(['\n' '/* two_norm of a vector  */' '\n'])];
     code = [code, sprintf([o.inline ' ' o.real ' two_norm (const ' o.real '* g){' '\n\n',...
-        '\t' 'int ii = 0;' '\n'...
-        '\t' o.real ' norm = 0.0, norm2 = 0.0;' '\n\n',...
-        '\t' 'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
+        o.indent.generic  'int ii = 0;' '\n'...
+        o.indent.generic  o.real ' norm = 0.0, norm2 = 0.0;' '\n\n',...
+        o.indent.generic  'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
     
-    code = [code, sprintf(['\t\t' 'norm2 += g[ii]*g[ii];' '\n',...
-        '\t' '}' '\n',...
-        '\t' 'norm = sqrt(norm2);' '\n',...
-        '\t' 'return norm;' '\n',...
+    code = [code, sprintf([o.indent.generic o.indent.generic 'norm2 += g[ii]*g[ii];' '\n',...
+        o.indent.generic  '}' '\n',...
+        o.indent.generic  'norm = sqrt(norm2);' '\n',...
+        o.indent.generic  'return norm;' '\n',...
         '}' '\n\n'])];
     
 end
@@ -3649,18 +3651,18 @@ code = [code, sprintf([o.inline ' void det_phi (const ' o.real ' J, const ' o.re
     o.real ' rho, ' o.real '* phi){' '\n\n'])];
 
 if o.merit_function == 1
-    code = [code, sprintf(['\t' '(*phi) = J + rho * one_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*phi) = J + rho * one_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.add = info.flops.it.add+ sum(o.nc); % flops of one_norm
     info.flops.it.comp = info.flops.it.comp+ sum(o.nc); %flops of abs in one_norm
 elseif o.merit_function == Inf
-    code = [code, sprintf(['\t' '(*phi) = J + rho * inf_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*phi) = J + rho * inf_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.comp = info.flops.it.comp+ 2*sum(o.nc); %flops of abs and max in inf_norm
 elseif o.merit_function == 2
-    code = [code, sprintf(['\t' '(*phi) = J + rho * two_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*phi) = J + rho * two_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.comp = info.flops.it.comp+ 2*sum(o.nc); %flops of abs and max in inf_norm
@@ -3675,25 +3677,25 @@ code = [code, sprintf(['\n' '/* it computes the derivative of the merit function
 code = [code, sprintf([o.inline ' void det_dot_phi (const ' o.real '* du, const ' o.real '* DJ, const ' ...
     o.real ' rho, const '  o.real '* gps, ' o.real '* dot_phi){' '\n\n'])];
 
-code = [code, sprintf(['\t' o.real ' pr = 0.0;' '\n'])];
+code = [code, sprintf([o.indent.generic  o.real ' pr = 0.0;' '\n'])];
 
-code = [code, sprintf(['\t' 'dot_product_Nnu(&pr, du, DJ);' '\n\n'])];
+code = [code, sprintf([o.indent.generic  'dot_product_Nnu(&pr, du, DJ);' '\n\n'])];
 info.flops.it.add = info.flops.it.add+ o.N*(o.nu-1); % addition of dot_product_Nnu
 info.flops.it.mul = info.flops.it.mul+ o.N * o.nu; % multiplication of dot_product_Nnu
 
 if o.merit_function == 1
-    code = [code, sprintf(['\t' '(*dot_phi) = pr - rho*one_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*dot_phi) = pr - rho*one_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.add = info.flops.it.add+ sum(o.nc); % flops of one_norm
     info.flops.it.comp = info.flops.it.comp+ sum(o.nc); %flops of abs in one_norm
 elseif o.merit_function == Inf
-    code = [code, sprintf(['\t' '(*dot_phi) = pr - rho*inf_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*dot_phi) = pr - rho*inf_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.comp = info.flops.it.comp+ 2*sum(o.nc); %flops of abs and max in inf_norm
 elseif o.merit_function == 2
-    code = [code, sprintf(['\t' '(*dot_phi) = pr - rho*two_norm(gps);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*dot_phi) = pr - rho*two_norm(gps);' '\n'])];
     info.flops.it.add = info.flops.it.add+ 1;
     info.flops.it.mul = info.flops.it.mul+ 1;
     info.flops.it.comp = info.flops.it.comp+ 2*sum(o.nc); %flops of abs and max in inf_norm
@@ -3707,19 +3709,19 @@ code = [code, sprintf(['\n' '/* it updates the penalty parameter rho */' '\n'])]
 code = [code, sprintf([o.inline ' void update_rho (const ' o.real '* muG, ' o.real '* rho, ' o.real '* rho_hat){' '\n\n'])];
 
 if o.merit_function == 1
-    code = [code, sprintf(['\t' '(*rho_hat) = inf_norm(muG);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*rho_hat) = inf_norm(muG);' '\n'])];
     info.flops.it.comp = info.flops.it.comp+ 2*sum(o.nc); %flops of abs and max in inf_norm
 elseif o.merit_function == Inf
-    code = [code, sprintf(['\t' '(*rho_hat) = one_norm(muG);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*rho_hat) = one_norm(muG);' '\n'])];
     info.flops.it.add = info.flops.it.add+ sum(o.nc); % flops of one_norm
     info.flops.it.comp = info.flops.it.comp+ sum(o.nc); %flops of abs in one_norm
 elseif o.merit_function == 2
-    code = [code, sprintf(['\t' '(*rho_hat) = two_norm(muG);' '\n'])];
+    code = [code, sprintf([o.indent.generic  '(*rho_hat) = two_norm(muG);' '\n'])];
     info.flops.it.add = info.flops.it.add+ sum(o.nc); % flops of one_norm
     info.flops.it.comp = info.flops.it.comp+ sum(o.nc); %flops of abs in one_norm
 end
 
-code = [code, sprintf(['\t' '(*rho) = ' o.max '( (*rho), (*rho_hat)); ' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*rho) = ' o.max '( (*rho), (*rho_hat)); ' '\n'])];
 info.flops.it.comp = info.flops.it.comp+ 1;
 
 code = [code, sprintf(['}' '\n\n' ])];
