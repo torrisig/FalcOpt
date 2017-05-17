@@ -261,6 +261,9 @@ for jj=1:o.N
     end
 end
 
+if min(min(isinf(o.box_lowerBound))) && min(min(isinf(o.box_upperBound))) && isempty(o.constraints_handle) && ~o.contractive && ~o.terminal
+    error('Unconstrained problems are not implemented yet. Please include at least one constraint');
+end
 
 o.K_amu = detect_structure( o.box_lowerBound);
 cons_lb = ~isinf(o.box_lowerBound);
