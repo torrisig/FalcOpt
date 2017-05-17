@@ -1,72 +1,66 @@
 % GENERATECODE Generate the algorithm .c file
 %
-% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R,...);
-% or
-% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R, 'par1', val1, 'par2', val2, ...) [with options]
+% [info] = generateCode(N,nx,nu,nc,Q,p,R, 'par1', val1, 'par2', val2, ...) [with options]
 %
 % where required inputs are:
-% N     - Prediction horizon
-% nx    - Number of states
-% nu    - Number of inputs
-% Q     - Weight matrix for states (cost)
-% P     - Weight matrix for terminal states (cost)
-% R     - Weight matrix for inputs (cost)
 %
-% Outputs:
-% - code:  string containing the generated code
-% - data: string containing the static data
-% - optCode: string containing the generate code for the algorithm only
-% - libr: string containing all the included libraries
-% - info: a struct containing the number of FLOPS
-% Standard use:
-% fprintf(file,[libr '\n' data '\n' code_spec '\n' code_alg '\n' optCode])
+%  N                                     - Prediction horizon
+%  nx                                    - Number of states
+%  nu                                    - Number of inputs
+%  Q                                     - Weight matrix for states (cost)
+%  P                                     - Weight matrix for terminal states (cost)
+%  R                                     - Weight matrix for inputs (cost)
 %
 % The following options are available:
 %
 % Problem definition options
 %
-%   nw                 - Known disturbance dimension
-%   trackReference     - A boolean. Track a desired time-varying reference. Default: false
-%   box_lowerBound     - Lower bound constraint for the inputs 
-%   box_upperBound     - Upper bound constraint for the inputs 
-%   constraints_handle - A function handle for provided nonlinear constraint function
-%   nn                 - number of nonlinear constraints (per stage)
-%   contractive        - A boolean. Default: 'false'
-%   terminal           - A boolean. Default: 'false'
-%   precision          - 'double'(default) or 'single'
+%   nw                                  - Known disturbance dimension
+%   trackReference                - A boolean. Track a desired time-varying reference. Default: false
+%   box_lowerBound              - Lower bound constraint for the inputs: either a nu*1 or nu*N matrix
+%                                               (stage-wise variable constraints)
+%   box_upperBound             - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
+%                                               (stage-wise variable constraints)
+%   constraints_handle           - A function handle for provided nonlinear constraint function
+%                                               or a 1*N cell of function handles
+%   nn                                  - number of nonlinear constraints
+%                                               or a cell 1*N (stage-wise variable constraints)
+%   contractive                      - A boolean. Default: 'false'
+%   terminal                           - A boolean. Default: 'false'
+%   precision                         - 'double'(default) or 'single'
 %
-% Computation of Jacobians 
+% Computation of Jacobians
 %
-%   gradients          - Different way of automatic function differentiation/generation
-%                         Can be: 'casadi','matlab','manual' or 'ccode'. Default: 'casadi'
-%   Jac_x_static       - Boolean, false(default): Jacobian_x is dynamic
-%                         (i.e., it depends on x and/or u)
-%   Jac_u_static       - Boolean, false(default): Jacobian_u is dynamic
-%                         (i.e., it depends on x and/or u)
-%   external_jacobian_x- Function handle to provide jacobian_x 
-%                         (only with options gradients = 'manual')
-%   external_jacobian_u- Function handle to provide jacobian_u 
-%                         (only with options gradients = 'manual')
-%   external_jacobian_n- Function handle to provide jacobian_n 
-%                         (only with options gradients = 'manual')
-%   Jac_x_struct       - Matrix containing the structure of the derivative
-%                         of 'dynamics' wrt to x (only for 'gradients' =
-%                         'ccode')
-%   Jac_u_struct       - Matrix containing the structure of the derivative
-%                         of 'dynamics' wrt to u (only for 'gradients' =
-%                         'ccode')
-%   Jac_n_struct       - Matrix containing the structure of the derivative
-%                         of 'constraints_handle' wrt to u (only for 
-%                         'gradients' = 'ccode')
-%   K_n                - Cell containing the vectors of the different stages 
-%                         on which the nonlinear constraints apply (only for
-%                         'gradients' = 'ccode')
+%   gradients                         - Different way of automatic function differentiation/generation
+%                                               Can be: 'casadi', 'matlab', 'manual' or 'ccode'. Default: 'casadi'
+%   Jac_x_static                    - Boolean, false(default): Jacobian_x is dynamic
+%                                               (i.e., it depends on x and/or u)
+%   Jac_u_static                    - Boolean, false(default): Jacobian_u is dynamic
+%                                               (i.e., it depends on x and/or u)
+%   external_jacobian_x          - Function handle to provide jacobian_x
+%                                               (only with options gradients = 'manual')
+%   external_jacobian_u          - Function handle to provide jacobian_u
+%                                               (only with options gradients = 'manual')
+%   external_jacobian_n          - Function handle to provide jacobian_n
+%                                               (only with options gradients = 'manual')
+%   Jac_x_struct                     - Matrix containing the structure of the derivative
+%                                               of 'dynamics' wrt to x (only for 'gradients' =
+%                                               'ccode')
+%   Jac_u_struct                     - Matrix containing the structure of the derivative
+%                                               of 'dynamics' wrt to u (only for 'gradients' =
+%                                               'ccode')
+%   Jac_n_struct                    - Matrix containing the structure of the derivative
+%                                               of 'constraints_handle' wrt to u (only for
+%                                               'gradients' = 'ccode')
+%   K_n                                 - Cell containing the vectors of the different stages
+%                                               on which the nonlinear constraints apply (only for
+%                                               'gradients' = 'ccode')
 %
-% Tolerance and max iteration settings 
+% Tolerance and max iteration settings
 %
-%   eps                - Tolerance on KKT optimality. Default: 1e-3
-%   maxIt              - Max number of iterations. Default: 4000
-%   maxItLs            - Max number of line search iterations. Default: 10
+%   eps                                 - Tolerance on KKT optimality. Default: 1e-3
+%   maxIt                              - Max number of iterations. Default: 4000
+%   maxItLs                           - Max number of line search iterations. Default: 10
 %
 % Algorithm parameters
 %
@@ -80,33 +74,38 @@
 %
 % Code generation settings
 %
-%   build_MEX          - Produce MEX file for use in Matlab. Default: true 
-%   name               - Name of the .c and .mex file (if any) 
+%   build_MEX          - Produce MEX file for use in Matlab. Default: true
+%   name               - Name of the .c and .mex file (if any)
 %   gendir             - Path of the .c file folder
 %   compile            - Compile the generated code. Default: true
 %   verbose            - Level of procedural output of this function.
 %                         Default: 0
-%   test               - Level of internal numerical tests performed. 
+%   test               - Level of internal numerical tests performed.
 %                         Default: 0
-%   debug              - Level of debug (number of inputs/outputs of 
+%   debug              - Level of debug (number of inputs/outputs of
 %                         generated functions). Default: 1
 %   indent             - Indentation to be used in code generation.
 %                         Default: '\t'
 %   inline             - Inline keyword to be used. Default: 'inline'
 %
+% Outputs:
+%
+%   info:                                 - a struct containing the number of FLOPS
+%
+%
 % Copyright (c) 2017 Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
 %                    Tommaso Robbiani <tommasro@student.ethz.ch>
-% 
+%
 % Permission is hereby granted, free of charge, to any person obtaining a copy
 % of this software and associated documentation files (the "Software"), to deal
 % in the Software without restriction, including without limitation the rights
 % to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 % copies of the Software, and to permit persons to whom the Software is
 % furnished to do so, subject to the following conditions:
-% 
+%
 % The above copyright notice and this permission notice shall be included in all
 % copies or substantial portions of the Software.
-% 
+%
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 % IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 % FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -154,7 +153,6 @@ p.addParameter('K_n',{},@iscell);
 p.addParameter('merit_function', 0, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
 p.addParameter('contractive', false, @islogical);
 p.addParameter('terminal', false, @islogical);
-p.addParameter('forceGradient',true,@islogical); % This parameter is to be deleted when converter example works without build_tbi()
 p.addParameter('box_lowerBound', [], @isnumeric);
 p.addParameter('box_upperBound', [], @isnumeric);
 p.addParameter('constraints_handle', [], @(x) (iscell(x) || isa(x,'function_handle')));
@@ -176,14 +174,6 @@ end
 if size(o.P,1) ~= o.nx
     error('P matrix must be of dimension nx');
 end
-%     if length(o.nn) == 1
-%         o.nc = repmat(o.nc, 1, o.N);
-%     elseif length(o.nc) ~= o.N
-%         error('Invalid nc');
-%     end
-%     if length(unique(o.nc)) > 1
-%         error('For now only same nc are supported.');
-%     end
 
 if (max(max(o.Jac_x_struct)) == Inf)
     o.Jac_x_struct = reshape(1:o.nx*o.nx,o.nx,o.nx)';
@@ -193,28 +183,15 @@ if (max(max(o.Jac_u_struct)) == Inf)
 end
 
 if (~isempty(o.Jac_n_struct))&&(max(size( o.Jac_n_struct) ~= [o.nu,o.nn]))
-    error_string = sprintf(['Jac_n_struct must be of size [%d, %d]' '\n'], o.nu,o.nn);
-    error(error_string);
+    error(['Jac_n_struct must be of size [%d, %d]' '\n'], o.nu,o.nn);
 end
 
-%     if (max(max(o.Jac_m_struct)) == Inf) % OBSOLETE - TO be deleted
-%         o.Jac_m_struct = ones( o.nn, o.nn);
-%     end
-%     if (max(max(o.Jac_g_struct)) == Inf)
-%         o.Jac_g_struct = reshape(1:o.nn*o.nu,o.nn,o.nu)';
-%     end
 if min(size(o.Jac_x_struct)== [o.nx,o.nx]) == 0
     error('Jacobian x structure must be [nx,nx]');
 end
 if min(size(o.Jac_u_struct)== [o.nx,o.nu]) == 0
     error('Jacobian u structure must be [nx,nu]');
 end
-%     if min(size(o.Jac_m_struct)== [o.nn,o.nn]) == 0 % OBSOLETE - TO be deleted
-%         error('Jacobian M structure must be [nc,nc]');
-%     end
-%     if min(size(o.Jac_g_struct)== [o.nu,o.nn]) == 0
-%         error('Jacobian constraint structure must be [nu,nc]');
-%     end
 
 if (o.terminal && o.contractive)
     error('Cannot have both contractive and terminal constraint');
@@ -244,12 +221,6 @@ else
     one_lowerBound = true;
     o.box_lowerBound = -Inf(o.nu,o.N);
 end
-
-% if max(max(o.box_lowerBound)) ~= -Inf
-%     o.lb_flag = true;
-% else
-%     o.lb_flag = false;
-% end
 
 one_upperBound = false;
 if ( ~isempty(o.box_upperBound))
@@ -291,31 +262,13 @@ for jj=1:o.N
 end
 
 
-o.K_amu = detect_structure( o.box_lowerBound,o );
+o.K_amu = detect_structure( o.box_lowerBound);
 cons_lb = ~isinf(o.box_lowerBound);
-o.K_lb = detect_structure( cons_lb(:,sum(cons_lb,1) >= 1), o );
-o.K_umb = detect_structure( o.box_upperBound,o );
+o.K_lb = detect_structure( cons_lb(:,sum(cons_lb,1) >= 1) );
+o.K_umb = detect_structure( o.box_upperBound );
 cons_ub = ~isinf(o.box_upperBound);
-o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1), o );
+o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1) );
 
-
-% TO BE DELETED
-%     if ( ~isempty(o.box_constraints))
-%         if( any(size(o.box_constraints)~=[2,o.nu])&& any(size(o.box_constraints)~=[o.nu,2])&& ...
-%                 any(size(o.box_constraints)~=[o.nu*o.N,2])&& any(size(o.box_constraints)~=[2,o.nu*o.N]))
-%             error('box_constraints must be of dimension [2,nu] or [2,N*nu]')
-%         elseif ( all(size(o.box_constraints)==[2,o.nu])||all(size(o.box_constraints)==[2,o.nu*o.N]))
-%                 o.box_constraints = o.box_constraints';
-%         end
-%         for i= 1:o.nu
-%             if( o.box_constraints(i,1) >= o.box_constraints(i,2))
-%                 error('Box constraint %i is infeasible',i);
-%             end
-%         end
-%         if( all(size(o.box_constraints)==[o.nu,2]) )
-%             o.box_constraints = repmat(o.box_constraints,o.N,1);
-%         end
-%     end
 
 %% nonlinear constraint handle
 
@@ -379,10 +332,10 @@ if ~isempty(o.K_n)&&~strcmp(o.gradients, 'ccode')
     for ii = 1:o.N
         test_u1 = ones(1,o.nu);
         test_f1 = o.constraints_handle{ii}(test_u1);
-
+        
         test_u2 = ones(o.nu,1);
         test_f2 = o.constraints_handle{ii}(test_u2);
-
+        
         if ((size(test_f1, 1) > 1) && (size(test_f1, 2) > 1))&&((size(test_f2, 1) > 1) && (size(test_f2, 2) > 1))
             error('The output of the nonlinear constraint function handles must be a vector');
         end
@@ -435,7 +388,7 @@ else
     if( o.nn{1}>0)
         for i= 1:length(o.external_jacobian_n)
             if( nargin(o.external_jacobian_n{i})~= 1)
-             error('Inputs of external_jacobian_n function handle must be u');
+                error('Inputs of external_jacobian_n function handle must be u');
             end
         end
     end
@@ -582,7 +535,7 @@ switch o.gradients
         path = cd;
         %path = [path sprintf(['\\' o.gendir])];
         if( exist(fullfile(path, 'external_functions.c'), 'file'))
-            info.src = [info.src; {sprintf('external_functions.c')}]; 
+            info.src = [info.src; {sprintf('external_functions.c')}];
             % warning string construction
             string = ['Make sure you provide the following c functions:\n' ...
                 'void model_mpc(const double* x, const double* u, const double* v, double* xp)\n'];
@@ -599,7 +552,7 @@ switch o.gradients
             string = [string, 'void build_umb(const double* u, const unsigned int k, double* r)\n'];
             string = [string,'no check of dimensions, the structure of matrices must be provided in an "ordered" manner: \n'...
                 'Jac_x_struct, Jac_u_struct and Jac_n_struct parameters must be provided \n' ];
-            warning(sprintf(string));
+            warning(string);
             
             % add .h file to library
             if( exist(fullfile(path, 'external_functions.h'), 'file'))
@@ -619,7 +572,7 @@ switch o.gradients
             data = [ data, sprintf('/*static data for jacobian_u*/\nstatic double G[%d];\n',max(o.Jac_u_struct(:)))];
             data = [ data, sprintf('/*static data for jacobian_x*/\nstatic double F[%d];\n',max(o.Jac_x_struct(:)))];
         else
-            error(sprintf(['file external_functions.c not found in directory ' path]));
+            error(['file external_functions.c not found in directory ' path]);
         end
     otherwise
         error(' "gradients" option can be: casadi, matlab, manual or ccode');
@@ -632,25 +585,22 @@ switch o.gradients
         [ d, c, i] = generate_n_and_Dn( o,'casadi');
         code = [code, c];
         data = [data, d];
-        o.nc = i.nc;  
+        o.nc = i.nc;
         for jj=1:length(o.K_n)
             %             o.Jac_g_struct = i.in_Dg_g.struct.structure.stored.mat;           % structure of Dg
             o.Jac_n_struct{jj} = i.in_Dn_n{jj}.struct.structure.stored.mat;     % structure of Dn
             %             o.Jac_g_static = i.in_Dg_g.static;
-                                                          % structure of constraints
+            % structure of constraints
             info.flops.once.casadi = info.flops.once.casadi + i.in_n{jj}.flops*length(o.K_n{jj});     % flops build_n
             info.flops.ls.casadi = info.flops.ls.casadi + i.in_n{jj}.flops*length(o.K_n{jj});         % flops build_n
             info.flops.it.casadi = info.flops.it.casadi + i.in_Dn_n{jj}.flops*length(o.K_n{jj});      % flops build_Dn
         end
-        try
+        try %#ok
             info.src = [info.src; i.src];                                           % external src file
             info.header = [info.header; i.header];                                  % external header file
             libr = [libr, sprintf(['#include "' i.header{:} '"' '\n'])];
         end
         
-        if ~o.forceGradient
-            o.Jac_m_struct = i.Jac_m_struct;    % structure of inverse matrix
-        end
     case {'matlab','manual'}
         % generate build_g, build_Dg, build_Dn functions
         [ d, c, i] = generate_n_and_Dn( o, 'matlab');
@@ -668,25 +618,23 @@ switch o.gradients
             info.flops.ls = falcopt.internal.addFlops( info.flops.ls, falcopt.internal.multFlops(i.in_n{jj}.flops,length(o.K_n{jj})));      % flops build_n
             info.flops.it = falcopt.internal.addFlops( info.flops.it, falcopt.internal.multFlops(i.in_Dn_n{jj}.flops,length(o.K_n{jj})));   % flops build_Dn
         end
-        if ~o.forceGradient
-            o.Jac_m_struct = i.Jac_m_struct;
-        end
+        
     case 'ccode'
         [ d, c, i] = generate_n_and_Dn( o,'ccode');
         code = [code, c];
         data = [data, d];
         o.nc = i.nc;
         
-    end   
-        
-        
-    % find the structure of the current Jac_n
-    o.Jac_n_struct_hor = cell(1,o.N);
+end
+
+
+% find the structure of the current Jac_n
+o.Jac_n_struct_hor = cell(1,o.N);
+
+if isequal(o.gradients,'ccode')
+    o.Jac_n_struct_hor = o.Jac_n_struct;
     
-    if isequal(o.gradients,'ccode')
-        o.Jac_n_struct_hor = o.Jac_n_struct;
-    
-    else
+else
     
     for ii= 1:o.N
         flag_exit = false;
@@ -703,7 +651,7 @@ switch o.gradients
             end
         end
     end
-    end
+end
 
 
 %     else % case external .c functions
@@ -733,7 +681,7 @@ o.K_nc = detect_structure_constraints( o.nc,o );
 c_w_dec = argument_w(o,true);
 c_tr_dec = argument_def(o,true);
 c_contr_dec = argument_contr_value(o,true);
- optCode = [optCode, sprintf(['/* main function of the algorithm */' '\n'])];
+optCode = [optCode, sprintf(['/* main function of the algorithm */' '\n'])];
 if o.debug > 1
     optCode = [optCode, sprintf(['int proposed_algorithm(const ' o.real '* x0, ' o.real '* u' c_w_dec c_tr_dec c_contr_dec ...
         ', ' o.real '* x, ' o.real '* fval, unsigned int* iter, unsigned int* iter_ls){' '\n' '\n'])];
@@ -811,13 +759,13 @@ c_psi_dot_use = argument_def_internal_psi_dot(o,false);
 c_contr_use = argument_contr_value(o,false);
 
 if (o.contractive || o.terminal)
-        if o.terminal
-            optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
-                'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
-        elseif o.contractive
-            optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
-                'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
-        end
+    if o.terminal
+        optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+            'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
+    elseif o.contractive
+        optCode = [optCode, sprintf(['\n' '\t' '/* Initialization of the cost J, its derivative dot_J,' '\n'...
+            'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
+    end
     optCode = [optCode, sprintf(['\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
 
@@ -855,11 +803,11 @@ optCode = [optCode, sprintf(['\t' 'for (it=0; it < %i; it++) {' '\n'], o.maxIt)]
 
 if (o.contractive || o.terminal)
     if o.terminal
-            optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
-                'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
-        elseif o.contractive
-            optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
-                'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
+        optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+            'the terminal constraint psi_N = x_N^top P x_N and its derivative dot_psi_N */' '\n'])];
+    elseif o.contractive
+        optCode = [optCode, sprintf(['\n' '\t\t' '/* Computation of the cost J, its derivative dot_J,' '\n'...
+            'the terminal constraint psi_N = x_{\tilde k}^top P x_{\tilde k} and its derivative dot_psi_N */' '\n'])];
     end
     optCode = [optCode, sprintf(['\t\t' 'if (it > 0) {' '\n'...
         '\t\t\t' 'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use '); }' '\n\n'])];
@@ -891,7 +839,7 @@ info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 optCode = [optCode, sprintf(['\n' '\t\t' '/* Compute the gradient step, projected onto the linearization of the constraints \n' ...
     'du: primal variable gradient steps, dsl: slack variables, muG: dual variables */' '\n'])];
 optCode = [optCode, sprintf(['\t\t' 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
-    
+
 % optCode = [optCode, sprintf(['if (it==2) {\n copy_Nnu(u,muG+30); return;}; \n'])]; % DEBUG
 
 % optCode = [optCode, sprintf(['copy_Nnu(u,muG); \n return; \n'])]; % DEBUG
@@ -987,7 +935,7 @@ if o.merit_function == 0
 else
     
     optCode = [optCode, sprintf(['\n' '\t\t' '/* Update the penalty parameter rho \n' ...
-            '\t\t\t\t' 'and compute merit function phi0 and its derivative phi0_dot */' '\n\n'])];
+        '\t\t\t\t' 'and compute merit function phi0 and its derivative phi0_dot */' '\n\n'])];
     optCode = [optCode, sprintf(['\t\t' 'update_rho(muG, &rho, &rho_hat);' '\n',...
         '\t\t' 'det_phi (J, gps, rho, &phi0);' '\n',...
         '\t\t' 'det_dot_phi (du,dot_J, rho, gps, &phi0_dot);' '\n\n'])];
@@ -1056,8 +1004,8 @@ if o.merit_function == 0
         '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
     
-%     optCode = [optCode, sprintf(['if (it==1) {copy_Nnu(u,gpsp + 30); \n return;}; \n'])]; % DEBUG
-
+    %     optCode = [optCode, sprintf(['if (it==1) {copy_Nnu(u,gpsp + 30); \n return;}; \n'])]; % DEBUG
+    
     optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
@@ -1149,7 +1097,7 @@ else
     optCode = [optCode, sprintf([...
         '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
-
+    
     optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
@@ -1220,7 +1168,7 @@ else
     else
         optCode = [optCode, sprintf(['\t\t\t\t\t' 'det_phi (Jt,gpsp,rho,&phit);' '\n'])];
     end
-   
+    
     optCode = [optCode, sprintf(['\n' '\t\t\t\t\t' '/* Check the Armijo condition */' '\n\n'])];
     optCode = [optCode, sprintf(['\t\t\t\t\t' 'if (phit - phi0 <= ' falcopt.internal.num2str(o.parLs, o.precision) '*t*phi0_dot){' '\n',...
         '\n' '\t\t\t\t\t\t' '/* step size t accepted. Break the line-search */' '\n',...
@@ -1345,14 +1293,13 @@ if ~isempty(o.gendir)
     end
     filename = [file_folder '/' o.name '.c'];
 else
-    file_folder = '';
     filename = [o.name '.c'];
 end
 
 
 ext_file = [];
 for k = 1:length(info.src)
-    ext_file = [ext_file, ' ', info.src{k}];
+    ext_file = [ext_file, ' ', info.src{k}]; %#ok
 end
 if strcmp(o.gradients,'ccode')
     if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
@@ -1475,38 +1422,38 @@ for k = 1:length(varargin)
     
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
-        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})];
+        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
         [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
             'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
             'static', true, 'const', true, 'verbose', o.verbose);
         info.(struct_name).struct = in_d;
         info.(struct_name).flops = 0;
         if ~isempty(d)
-            data = [data, d, sprintf('\n')];
+            data = [data, d, sprintf('\n')]; %#ok
         end
         
     else
         jac = Function(J_name,{x,u,w},{in.stored.values});
-        sxfcn{length(sxfcn)+1} =  jac;
+        sxfcn{length(sxfcn)+1} =  jac; %#ok
         
         % wrapper jacobian
-        code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',varargin{k})];
+        code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
         if( o.nw > 0)
-            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])];
-            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],3)];
-            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
+            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
+            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],3)]; %#ok
+            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
-                        '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ];
+                '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ]; %#ok
         else
-            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])];
-            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],2)];
-            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
+            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
+            code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],2)]; %#ok
+            code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
-                        '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ];
+                '\t' J_name '( in, &res, &iw, w, mem);\t/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
         
-        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})];
-        data = [data, sprintf(['\t' 'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)];
+        data = [data, sprintf('\t/* Static data for jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
+        data = [data, sprintf(['\t' 'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)]; %#ok
         info.(struct_name).struct.structure = in;
         try
             info.(struct_name).flops =   jac.getAlgorithmSize(); %flops
@@ -1521,7 +1468,7 @@ end
 
 end
 
-function K = detect_structure ( ind, o )
+function K = detect_structure ( ind )
 % ind is a matrix of bools of dims (nu, N)
 
 n = size(ind,2);
@@ -1551,7 +1498,7 @@ function K = detect_different_NLconstraints(o)
 indices = nan (1,o.N);
 i = 1;
 while any(isnan(indices))
-    K{i} = [];
+    K{i} = []; %#ok
     k_all = find(isnan(indices));
     k = k_all(1);
     %k = find(isnan(indices),1,'first');
@@ -1576,7 +1523,7 @@ i = 1;
 while any(isnan(indices))
     k = find(isnan(indices),1,'first');
     I = repmat(ind(:,k),1,o.N) == ind;
-    K{i} = find(I);
+    K{i} = find(I); %#ok
     indices(K{i}) = 0;
     i = i+1;
 end
@@ -1614,10 +1561,10 @@ if ~isempty(o.gendir)
         mkdir(file_folder);
         cd (sprintf(o.gendir));
     end
-%     if exist(file_folder, 'dir')~=7
-%         mkdir(file_folder);
-%     end
-%     cd (sprintf(o.gendir));
+    %     if exist(file_folder, 'dir')~=7
+    %         mkdir(file_folder);
+    %     end
+    %     cd (sprintf(o.gendir));
     C.generate( ) ;
     cd ..;
     src = { sprintf([o.gendir '/%s.c'],fileName)};
@@ -1685,19 +1632,19 @@ for k = 1:length(varargin)
     end
     [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
     info.(struct_name).static = i.static;
-    data = [ data, sprintf([o.indent.data '/*Static data for Jacobian w.r.t %c*/\n'],varargin{k})];
+    data = [ data, sprintf([o.indent.data '/*Static data for Jacobian w.r.t %c*/\n'],varargin{k})]; %#ok
     if( info.(struct_name).static)
-        data = [data, sprintf([o.indent.data 'static const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)];
-        data = [data, d, sprintf([o.indent.data '};\n\n'])];
+        data = [data, sprintf([o.indent.data 'static const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
+        data = [data, d, sprintf([o.indent.data '};\n\n'])]; %#ok
     else
-        data = [data, sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i];\n'], i.structure.num)];
-        code = [ code, sprintf([o.indent.data '/*Jacobian w.r.t %c*/\n'],varargin{k})];
+        data = [data, sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
+        code = [ code, sprintf([o.indent.data '/*Jacobian w.r.t %c*/\n'],varargin{k})]; %#ok
         if( o.nw > 0)
-            code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])];
+            code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         else
-            code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])];
+            code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         end
-        code = [code, d, sprintf([o.indent.code '}\n\n'])];
+        code = [code, d, sprintf([o.indent.code '}\n\n'])]; %#ok
     end
     info.(struct_name).struct.structure = i.structure;
     info.(struct_name).flops = i.flops;
@@ -1722,8 +1669,8 @@ if( o.nw>0)
         jac_u = o.external_jacobian_u(x,u,w);
         jac_x = o.external_jacobian_x(x,u,w);
     catch
-        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
-                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+        error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+            'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
     end
 else
     try
@@ -1731,8 +1678,8 @@ else
         jac_u = o.external_jacobian_u(x,u);
         jac_x = o.external_jacobian_x(x,u);
     catch
-        error(sprintf(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
-                       'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']));
+        error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+            'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
     end
 end
 
@@ -1762,19 +1709,19 @@ for k = 1:2
     end
     [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
     info.(struct_name).static = i.static;
-    data = [ data, sprintf(['\t/*Static data for ' J_name '*/\n'])];
+    data = [ data, sprintf(['\t/*Static data for ' J_name '*/\n'])]; %#ok
     if( info.(struct_name).static)
-        data = [data, sprintf(['\tstatic const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)];
-        data = [data, d, sprintf(['};\n\n'])];
+        data = [data, sprintf(['\tstatic const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
+        data = [data, d, sprintf(['};\n\n'])]; %#ok
     else
-        data = [data, sprintf(['\tstatic ' o.real ' ' static_name '[%i];\n'], i.structure.num)];
-        code = [ code, sprintf(['/* ' J_name '*/\n'])];
+        data = [data, sprintf(['\tstatic ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
+        code = [ code, sprintf(['/* ' J_name '*/\n'])]; %#ok
         if( o.nw > 0)
-            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])];
+            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         else
-            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])];
+            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         end
-        code = [code, d, sprintf(['}\n\n'])];
+        code = [code, d, sprintf(['}\n\n'])]; %#ok
     end
     info.(struct_name).struct.structure = i.structure;
     info.(struct_name).flops = i.flops;
@@ -1827,10 +1774,10 @@ if( nl_con)
     for jj=1:length(o.K_n)
         if( nargin(o.constraints_handle{jj}) == 1)
             try
-                n{jj} = o.constraints_handle{jj}(z);
+                n{jj} = o.constraints_handle{jj}(z); %#ok
             catch
                 try
-                    n{jj} = o.constraints_handle{jj}(z');
+                    n{jj} = o.constraints_handle{jj}(z'); %#ok
                 catch
                     error('inequality constraints can depend only on inputs' );
                 end
@@ -1906,35 +1853,6 @@ for ii=1:length(o.K_umb)
 end
 code = [code, sprintf([o.indent.code '}' '\n'])];
 
-% TO BE DELETED do not generate build_g anymore
-% add variable n
-% g = [];
-% for jj = 1:o.N
-%     g_add = [];
-%     for ii = 1:o.nu
-%         if ~isinf(o.box_lowerBound(ii,jj))
-%             g_add = [g_add; o.box_lowerBound(ii,jj) - z];
-%         end
-%         if ~isinf(o.box_upperBound(ii,jj))
-%             g_add = [g_add; z-o.box_upperBound(ii,jj)];
-%         end
-%         g = [g;g_add;n{jj}];
-%     end
-% end
-
-% TO BE DELETED
-% box = o.box_constraints;
-% g = n;
-% if( ibox)
-%     for i = size(box,1):-1:1
-%         if( i>o.nu)
-%             g = [ box(i,1)-z(i-o.nu); z(i-o.nu)-box(i,2); g];
-%         else
-%             g = [ box(i,1)-z(i); z(i)-box(i,2); g];
-%         end
-%     end
-% end
-
 % build o.nc (constraints structure)
 info.nc = cell2mat(o.nn);
 
@@ -1945,163 +1863,127 @@ else
     info.nc = [info.nc 0];
 end
 
-for i=1:o.N % not tested ToDo Tommaso
+for i=1:o.N 
     lb = sum(~isinf(o.box_lowerBound(:,i)));
     ub = sum(~isinf(o.box_upperBound(:,i)));
     info.nc(i) = info.nc(i)+lb+ub;
 end
 
-
-
 % generate build_n and build_Dn
 if( nl_con)
     switch grad
         case 'casadi' % use casadi generation
-        import casadi.*
-        %     % build_Dg
-        %     Dg = jacobian( g, z);
-        %     Dg = transpose(Dg);
-        %     [info.in_Dg_g.static,i] = falcopt.casadi2struct(Dg);
-        %     Dg_f = Function('build_Dg_casadi',{z},{i.stored.values});
-        %     sxfcn{length(sxfcn)+1} =  Dg_f;
-        %
-        %     % wrapper build_Dg
-        %     code = [code, sprintf('/* Jacobian_u of constraints */\n')];
-        %     code = [code, sprintf(['void build_Dg( const ' o.real '* u, ' o.real '* Dg_fun){' '\n\n'])];
-        %     code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)];
-        %     code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
-        %     code = [code, sprintf(['\tin[0] = u;\n\n' ...
-        %         '\tbuild_Dg_casadi( in, &Dg_fun, &iw, w, mem);\t/* external casadi generated function*/\n}\n\n']) ];
-        %     info.in_Dg_g.struct.structure = i;
-        %     try
-        %         info.in_Dg_g.flops =   Dg_f.getAlgorithmSize(); %flops
-        %     catch
-        %         warning('Cannot use casadi.Function.getAlgoirthmSize()');
-        %     end
-        sxfcn = {};
-        
-        if( nl_con)  % if exist n(u)
-            for jj=1:length(o.K_n)
-                
-                % build_n
-                [~,in_n{jj}] = falcopt.casadi2struct( n{jj});
-                
-                y_f{jj} = Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values});
-                
-                sxfcn{end + 1} = y_f{jj};
-                try
-                    info.in_n{jj}.flops =  y_f{jj}.getAlgorithmSize(); %flops
-                catch
-                    warning('Cannot use casadi.Function.getAlgoirthmSize()');
-                end
-                info.in_n{jj}.static = 0;
-                info.in_n{jj}.struct.structure = in_n{jj};
-                
-                % wrapper function
-                code = [code, sprintf(['/* Constraints evaluation*/' '\n'])];
-                code = [code, sprintf(['void build_n_%d( const ' o.real '* z,'  o.real '* n){' '\n\n'],jj)];
-                code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)];
-                code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
-                code = [code, sprintf(['\tin[0] = z;\n\n' ...
-                    '\t' 'build_n_%d_casadi( in, &n, &iw, w, mem);\t/* external casadi generated function */\n}\n\n'],jj) ];
-                
-%                 % wrapper build_Dg
-%                 code = [code, sprintf('/* Jacobian_u of constraints */\n')];
-%                 code = [code, sprintf(['void build_Dg( const ' o.real '* u, ' o.real '* Dg_fun){' '\n\n'])];
-%                 code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)];
-%                 code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
-%                 code = [code, sprintf(['\tin[0] = u;\n\n' ...
-%                     '\tbuild_Dg_casadi( in, &Dg_fun, &iw, w, mem);\t/* external casadi generated function*/\n}\n\n']) ];
-                
-                % build_Dn
-                Dn{jj} = jacobian( n{jj}, z);
-                Dn{jj} = transpose(Dn{jj});
-                [info.in_Dn_n{jj}.static,i] = falcopt.casadi2struct(Dn{jj});
-                
-                if( info.in_Dn_n{jj}.static) %is jac matrix constant ?
-                    name.M = sprintf(['build_Dn_%d_casadi'],jj);
-                    [d, ~, in] = falcopt.generateData(full(DM(Dn{jj})), 'names', name, ...
-                        'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
-                        'static', true, 'const', true, 'verbose', o.verbose);
-                    info.in_Dn_n{jj}.struct = in;
-                    info.in_Dn_n{jj}.flops = 0;
-                    if ~isempty(d)
-                        data = [data, d, sprintf('\n')];
-                    end
-                else
-                    Dn_f{jj} = Function(sprintf(['build_Dn_%d_casadi'],jj),{z},{i.stored.values});
-                    sxfcn{end + 1} =  Dn_f{jj};
+            import casadi.*
+
+            sxfcn = {};
+            
+            in_n = cell(length(o.K_n));
+            y_f = cell(length(o.K_n));
+            Dn = cell(length(o.K_n));
+            Dn_f = cell(length(o.K_n));
+            
+            if( nl_con)  % if exist n(u)
+                for jj=1:length(o.K_n)
                     
-                    % wrapper build_Dn
-                    code = [code, sprintf('/* Jacobian_u of nonlinear constraints */\n')];
-                    code = [code, sprintf(['void build_Dn_%d( const ' o.real '* u, ' o.real '* Dn_fun){' '\n\n'],jj)];
-                    code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)];
-                    code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
-                    code = [code, sprintf(['\tin[0] = u;\n\n' ...
-                        '\t' 'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);\t/* external casadi generated function*/\n}\n\n'],jj) ];
-                    info.in_Dn_n{jj}.struct.structure = i;
+                    % build_n
+                    [~,in_n{jj}] = falcopt.casadi2struct( n{jj}); 
+                    
+                    y_f{jj} = Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values}); 
+                    
+                    sxfcn{end + 1} = y_f{jj}; %#ok
                     try
-                        info.in_Dn_n{jj}.flops =   Dn_f{jj}.getAlgorithmSize(); %flops
+                        info.in_n{jj}.flops =  y_f{jj}.getAlgorithmSize(); %flops
                     catch
                         warning('Cannot use casadi.Function.getAlgoirthmSize()');
                     end
+                    info.in_n{jj}.static = 0;
+                    info.in_n{jj}.struct.structure = in_n{jj};
+                    
+                    % wrapper function
+                    code = [code, sprintf(['/* Constraints evaluation*/' '\n'])]; %#ok
+                    code = [code, sprintf(['void build_n_%d( const ' o.real '* z,'  o.real '* n){' '\n\n'],jj)]; %#ok
+                    code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)]; %#ok
+                    code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+                    code = [code, sprintf(['\tin[0] = z;\n\n' ...
+                        '\t' 'build_n_%d_casadi( in, &n, &iw, w, mem);\t/* external casadi generated function */\n}\n\n'],jj) ]; %#ok
+                    
+                    % build_Dn
+                    Dn{jj} = jacobian( n{jj}, z); 
+                    Dn{jj} = transpose(Dn{jj}); 
+                    [info.in_Dn_n{jj}.static,i] = falcopt.casadi2struct(Dn{jj});
+                    
+                    if( info.in_Dn_n{jj}.static) %is jac matrix constant ?
+                        name.M = sprintf('build_Dn_%d_casadi',jj);
+                        [d, ~, in] = falcopt.generateData(full(DM(Dn{jj})), 'names', name, ...
+                            'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
+                            'static', true, 'const', true, 'verbose', o.verbose);
+                        info.in_Dn_n{jj}.struct = in;
+                        info.in_Dn_n{jj}.flops = 0;
+                        if ~isempty(d)
+                            data = [data, d, sprintf('\n')]; %#ok
+                        end
+                    else
+                        Dn_f{jj} = Function(sprintf('build_Dn_%d_casadi',jj),{z},{i.stored.values});
+                        sxfcn{end + 1} =  Dn_f{jj}; %#ok
+                        
+                        % wrapper build_Dn
+                        code = [code, sprintf('/* Jacobian_u of nonlinear constraints */\n')]; %#ok
+                        code = [code, sprintf(['void build_Dn_%d( const ' o.real '* u, ' o.real '* Dn_fun){' '\n\n'],jj)]; %#ok
+                        code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],1)]; %#ok
+                        code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+                        code = [code, sprintf(['\tin[0] = u;\n\n' ... 
+                            '\t' 'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);\t/* external casadi generated function*/\n}\n\n'],jj) ]; %#ok
+                        info.in_Dn_n{jj}.struct.structure = i;
+                        try
+                            info.in_Dn_n{jj}.flops =   Dn_f{jj}.getAlgorithmSize(); %flops
+                        catch
+                            warning('Cannot use casadi.Function.getAlgoirthmSize()');
+                        end
+                    end
                 end
+                
             end
             
-        end
-        
-        
+            
         case {'manual','matlab'} % use matlab jacobian generation
-        
-        %
-        %     %build_Dg
-        %     Dg = jacobian( g,z);
-        %     Dg = Dg';
-        %     [c,i] = falcopt.fcn2struct( Dg, o, 'name', 'Dg_fun');
-        %     code = [code, sprintf('/* Jacobian_u of constraints matrix*/\n')];
-        %     code = [code, sprintf(['void build_Dg( const ' real '* u, ' real '* Dg_fun){' '\n'])];
-        %     code = [code, c, sprintf('}\n\n')];
-        %     info.in_Dg_g.struct.structure = i.structure;
-        %     info.in_Dg_g.flops =   i.flops; %flops
-        %     info.in_Dg_g.static = 0;
-        %     sxfcn = {};
-        
-        
-        
-        for jj=1:length(o.K_n)
             
-            [c, in_n{jj}] = falcopt.fcn2struct( n{jj},o,'name', 'n' );
-            code = [code, sprintf('/* Constraints evaluation*/ \n')];
-            code = [code, sprintf(['void build_n_' num2str(jj) '( const ' o.real '* u,'  o.real '* n){' '\n'])];
-            code = [code, c, sprintf('}\n\n')];
+            for jj=1:length(o.K_n)
+                                
+                in_n = cell(length(o.K_n));
+                Dn = cell(length(o.K_n));
             
-            info.in_n{jj}.flops =  in_n{jj}.flops; %flops
-            info.in_n{jj}.static = 0;
-            info.in_n{jj}.struct.structure = in_n{jj}.structure;
-            
-            %build_Dn
-            if(  isequal(o.gradients,'matlab'))
-                Dn{jj} = jacobian( n{jj},z);
-                Dn{jj} = Dn{jj}';
-            else
-                try
-                    Dn{jj} = o.external_jacobian_n{jj}(z);
-                catch
-                    error('o.external_jacobian_n function not found. Or invalid output: it should return a struct of size o.N');
+                [c, in_n{jj}] = falcopt.fcn2struct( n{jj},o,'name', 'n' ); 
+                code = [code, sprintf('/* Constraints evaluation*/ \n')]; %#ok
+                code = [code, sprintf(['void build_n_' num2str(jj) '( const ' o.real '* u,'  o.real '* n){' '\n'])]; %#ok
+                code = [code, c, sprintf('}\n\n')]; %#ok
+                
+                info.in_n{jj}.flops =  in_n{jj}.flops; %flops
+                info.in_n{jj}.static = 0;
+                info.in_n{jj}.struct.structure = in_n{jj}.structure;
+                
+                %build_Dn
+                if(  isequal(o.gradients,'matlab'))
+                    Dn{jj} = jacobian( n{jj},z);
+                    Dn{jj} = Dn{jj}';
+                else
+                    try
+                        Dn{jj} = o.external_jacobian_n{jj}(z);
+                    catch
+                        error('o.external_jacobian_n function not found. Or invalid output: it should return a struct of size o.N');
+                    end
                 end
+                [c,i] = falcopt.fcn2struct( Dn{jj}, o, 'name', 'Dn_fun');
+                code = [code, sprintf('/* Jacobian_u of nonlinear constraints*/\n')]; %#ok
+                code = [code, sprintf(['void build_Dn_' num2str(jj) '( const ' o.real '* u, ' o.real '* Dn_fun){' '\n'])]; %#ok
+                code = [code, c, sprintf('}\n\n')]; %#ok
+                info.in_Dn_n{jj}.struct.structure = i.structure;
+                info.in_Dn_n{jj}.flops =   i.flops; %flops
+                info.in_Dn_n{jj}.static = 0;
             end
-            [c,i] = falcopt.fcn2struct( Dn{jj}, o, 'name', 'Dn_fun');
-            code = [code, sprintf('/* Jacobian_u of nonlinear constraints*/\n')];
-            code = [code, sprintf(['void build_Dn_' num2str(jj) '( const ' o.real '* u, ' o.real '* Dn_fun){' '\n'])];
-            code = [code, c, sprintf('}\n\n')];
-            info.in_Dn_n{jj}.struct.structure = i.structure;
-            info.in_Dn_n{jj}.flops =   i.flops; %flops
-            info.in_Dn_n{jj}.static = 0;
-        end
-        
-        
-        
-        sxfcn = {};
+            
+            
+            
+            sxfcn = {};
     end
     % generate a selector that chooses which n to use
     code = [code, sprintf(['\n' o.indent.code 'void build_n(const ' o.real '* u, const unsigned int k, ' o.real '* n){' '\n\n'])];
@@ -2122,59 +2004,6 @@ if( nl_con)
         code = [code, sprintf([o.indent.code '\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf([o.indent.code '}' '\n'])];
-end
-
-
-% build inverse: ToDo eventually delete this part
-if( ~o.forceGradient)
-    if( isequal(o.gradients,'casadi'))
-        % build_tbi
-        import casadi.*
-        %sl = SX.sym('sl',o.nu);
-        sl = SX.sym('sl',size(Dg,2));
-        tbi = transpose(Dg)*Dg + diag(sl)*diag(sl);
-        [info.in_tbi.static,i] = falcopt.casadi2struct(tbi);
-        
-        % the inversion does not work with this variant
-        %tbi_f = Function('build_tbi_casadi',{z,sl},{i.stored.values});
-        tbi_f = Function('build_tbi_casadi',{z,sl},{tbi});
-        sxfcn{length(sxfcn)+1} =  tbi_f;
-        
-        % wrapper build_tbi
-        code = [code, sprintf(['void build_tbi( const ' o.real '* u, const ' o.real '* sl, ' o.real '* A){' '\n\n'])];
-        code = [code, sprintf(['\t' 'const ' o.real ' *in[%i];\n'],2)];
-        code = [code, sprintf(['\t' o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)];
-        code = [code, sprintf(['\tin[0] = u;\n\tin[1] = sl;\n\n' ...
-            '\tbuild_tbi_casadi( in, &A, &iw, w, mem);\n}\n']) ];
-        info.in_tbi.struct.structure = i;
-        try
-            info.in_tbi.flops =   tbi_f.getAlgorithmSize(); %flops
-        catch
-            warning('Cannot use casadi.Function.getAlgoirthmSize()');
-        end
-        
-        
-        % build inverse
-        in_M.structure.stored.mat = i.stored.mat;
-        info.Jac_m_struct = i.stored.mat;
-        c = falcopt.generateInverse(in_M.structure.stored.mat, 'names', struct('fun', 'build_inv'), 'symmetric', true, 'indent', o.indent, 'inline', o.inline, 'types', o.real, 'precision', o.precision, 'test', o.test, 'verbose', o.verbose);
-        code = [code, c];
-        
-        
-    elseif ( isequal(o.gradients,'matlab'))
-        sl = sym('sl',[size(Dg,2),1],'real');
-        tbi = Dg'*Dg + diag(sl)*diag(sl);
-        [c,i] = falcopt.fcn2struct( tbi, o, 'name', 'A', 'structure' ,'sparse');
-        code = [code, sprintf(['void build_tbi( const ' o.real '* u, const ' o.real '* sl, ' o.real '* A){' '\n\n'])];
-        code = [code, c, sprintf('\n}\n')];
-        
-        % build inverse
-        [c,i] = falcopt.fcn2struct( tbi, o, 'name', 'A');
-        in_M.structure.stored.mat = i.structure.mat;
-        info.Jac_m_struct = i.structure.mat;
-        c = falcopt.generateInverse(in_M.structure.stored.mat, 'names', struct('fun', 'build_inv'), 'symmetric', true, 'indent', o.indent, 'inline', o.inline, 'types', o.real, 'precision', o.precision, 'test', o.test, 'verbose', o.verbose);
-        code = [code, c];
-    end
 end
 
 % generate .c file
@@ -2202,7 +2031,7 @@ end
 end
 
 function c = argument_contr_value(o,declaration)
-% consider the additional argument for the constant term introduced by the 
+% consider the additional argument for the constant term introduced by the
 % contractive/terminal constraint
 % declaration: logic variable, if true it adds the type of variable
 
@@ -2243,7 +2072,7 @@ end
 end
 
 function [c] = argument_def_internal_psi(o,declaration)
-% consider the additional argument introduced by the contractive/terminal 
+% consider the additional argument introduced by the contractive/terminal
 % approach (variable psi_N)
 % declaration: logic variable, if true it adds const and the type of variable
 
@@ -2261,7 +2090,7 @@ end
 end
 
 function [c] = argument_def_internal_psi_noconst(o,declaration)
-% consider the additional argument introduced by the contractive/terminal 
+% consider the additional argument introduced by the contractive/terminal
 % approach (variable psi_N)
 % declaration: logic variable, if true it adds the type of variable
 
@@ -2279,7 +2108,7 @@ end
 end
 
 function [c] = argument_def_internal_psi_plus(o,declaration)
-% consider the additional argument introduced by the contractive/terminal 
+% consider the additional argument introduced by the contractive/terminal
 % approach (variable psi_Np)
 % declaration: logic variable, if true it adds the type of variable
 
@@ -2297,7 +2126,7 @@ end
 end
 
 function [c] = argument_def_internal_psi_dot_noconst(o,declaration)
-% consider the additional argument introduced by the contractive/terminal 
+% consider the additional argument introduced by the contractive/terminal
 % approach (variable dot_psi_N)
 % declaration: logic variable, if true it adds the type of variable
 
@@ -2315,7 +2144,7 @@ end
 end
 
 function [c] = argument_def_internal_psi_dot(o,declaration)
-% consider the additional argument introduced by the contractive/terminal 
+% consider the additional argument introduced by the contractive/terminal
 % approach (variable dot_psi_N)
 % declaration: logic variable, if true it adds const and the type of variable
 
@@ -2339,14 +2168,13 @@ function [code, data] = generate_forward_simulation(o)
 nx = o.nx;
 nu = o.nu;
 nw = o.nw;
-N = o.N; 
-real = o.precision;
+N = o.N;
 
 code = [];
 data = [];
 
 code = [code, sprintf(['\n' '/* det_x is a forward simulation of model_mpc with initial state x0 \n'...
-    'and sequence of predicted inputs u (of dim. N*nu) */' '\n'])]; 
+    'and sequence of predicted inputs u (of dim. N*nu) */' '\n'])];
 if o.nw >0
     code = [code, sprintf([o.inline ' void det_x (const ' o.real '* x0, const ' o.real '* u, const ' o.real '* w, ' o.real '* x){' '\n\n'])];
 else
@@ -2454,7 +2282,7 @@ end
 
 code = [code, sprintf(['\t' 'unsigned int ii = 0;' '\n\n'])];
 
-code = [code, sprintf(['\n' '\t' '/* Compute tmp_x (cost associated to last stage) */' '\n'])]; 
+code = [code, sprintf(['\n' '\t' '/* Compute tmp_x (cost associated to last stage) */' '\n'])];
 if trackRef
     code = [code, sprintf(['\t' 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
     code = [code, sprintf(['\t' 'Pmul(Px, dx);' '\n'])];
@@ -2507,7 +2335,7 @@ else
     end
 end
 
-code = [code, sprintf(['\n' '\t' '/* Start computing dot_J from the bottom */' '\n'])]; 
+code = [code, sprintf(['\n' '\t' '/* Start computing dot_J from the bottom */' '\n'])];
 code = [code, sprintf(['\t' 'product_and_sum_nu(dot_J + %d,Px, Ru, G);' '\n\n'], (N-1)*nu)];
 
 if o.terminal
@@ -2586,7 +2414,7 @@ else
     info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
 end
 
-code = [code, sprintf(['\n' '\t\t' '/* Increment J */' '\n'])]; 
+code = [code, sprintf(['\n' '\t\t' '/* Increment J */' '\n'])];
 code = [code, sprintf(['\t\t' '(*J) += .50*(tmp_x + tmp_u);' '\n\n'])];
 info.flop.it.mul = info.flops.it.mul+1*(N-1);
 info.flops.it.add = info.flops.it.add+2*(N-1);
@@ -2726,7 +2554,6 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
 nx = o.nx;
 nu = o.nu;
-nc = o.nc(1);
 Q = o.Q;
 R = o.R;
 P = o.P;
@@ -2811,7 +2638,7 @@ if o.contractive
     code =  [code, sprintf(['void set_zero_nu (' o.real '* x){\n\n'])];
     
     for jj=0:nu-1
-        code =  [code, sprintf(['\t' 'x[%d] = 0.0;' '\n'],jj)];
+        code =  [code, sprintf(['\t' 'x[%d] = 0.0;' '\n'],jj)]; %#ok
     end
     
     code =  [code, sprintf(['\n\n' '}' '\n\n'])];
@@ -3009,7 +2836,6 @@ function [code, data, info] = generate_gradient_step(o)
 code = [];
 data = [];
 
-nc = o.nc(1);
 nu = o.nu;
 N = o.N;
 alpha = o.stepSize;
@@ -3032,9 +2858,9 @@ for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_lb)
@@ -3044,7 +2870,7 @@ if ~isempty(o.K_lb)
         code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3058,9 +2884,9 @@ for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
@@ -3071,9 +2897,9 @@ if ~isempty(o.K_ub)
         code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
-    code = [code, sprintf(['}' '\n'])];
+    code = [code, sprintf(['}' '\n'])]; 
 end
 
 % nonlinear constraints
@@ -3085,9 +2911,9 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         'transpose', true, 'static', false,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     [d, c, in] = falcopt.generateMVMult({1/alpha*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})}, ...
@@ -3096,9 +2922,9 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         'static', [true,true],...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 
@@ -3109,7 +2935,7 @@ if ~isempty(o.K_n)
         code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'Dntop_times_dotJ_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
     
@@ -3119,45 +2945,12 @@ if ~isempty(o.K_n)
         code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
 
-
-% [d, c, in] = falcopt.generateMVMult({o.Jac_g_struct}, ... % TO BE DELETED
-%     'names', struct('fun', 'product_Dgtop_DJ', 'M', {{'A'}},...
-%     'v', {{'x'}}, 'r', 'z'), 'indent', o.indent, 'types', o.real,'precision', o.precision, 'structure', 'ordered', 'verbose', o.verbose,...
-%     'test', o.test, 'inline', o.inline, 'indent', o.indent, 'static', false, 'transpose', true);
-% if ~isempty(d)
-%     data = [data, d, sprintf('\n')];
-% end
-% code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-%
-% [d, c, in] = falcopt.generateMVMult({1/alpha*eye(nc), -eye(nc)}, ...
-%     'names', struct('fun', 'scale_sub_nc', 'M', {{'alpha_inv', 'mI'}},...
-%     'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-% if ~isempty(d)
-%     data = [data, d, sprintf('\n')];
-% end
-% code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-
-
 if (o.contractive || o.terminal)
-    
-    %     ... % TO BE DELETED
-    %     [d, c, in] = falcopt.generateMVMult({eye(nu), o.Jac_g_struct, eye(nu)},
-    %         'names', struct('fun', 'product_matrix_nu', 'M', {{'I', 'B', 'N'}},...
-    %         'v', {{'x1', 'x2', 'x3'}}, 'r', 'z'),'structure', 'ordered', 'types', o.real, 'precision', o.precision, 'static', [true,false,false],...
-    %         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-    %     [d, c, in] = falcopt.generateMVMult({eye(nu), eye(nu)}, ...
-    %         'names', struct('fun', 'sum_terminal', 'M', {{'I', 'N'}},...
-    %         'v', {{'x1', 'x2'}}, 'r', 'z'),'structure', 'ordered', 'types', o.real,...
-    %         'precision', o.precision, 'static', [true,false],...
-    %         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-    
     
     [d, c, in] = falcopt.generateMVMult({eye(nu)}, ...
         'names', struct('fun', 'sum_terminal', 'M', {{'I'}},...
@@ -3174,13 +2967,8 @@ if (o.contractive || o.terminal)
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
 end
-    
-    %     [d, c, in] = falcopt.generateMVMult({eye(nu), o.Jac_g_struct}, ... %TO BE DELETED
-    %         'names', struct('fun', 'product_matrix_nu', 'M', {{'I', 'B'}},...
-    %         'v', {{'x1', 'x2'}}, 'r', 'z'),'structure', 'ordered', 'types', o.real, 'precision', o.precision, 'static', [true,false],...
-    %         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-    
-    % lower bounds
+
+% lower bounds
 for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
     struct_mat = diag(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
@@ -3189,9 +2977,9 @@ for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
         'v', {{'x1'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_lb)
@@ -3201,9 +2989,9 @@ if ~isempty(o.K_lb)
         code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'minus_Ina_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
-    code = [code, sprintf(['}' '\n'])];
+    code = [code, sprintf(['}' '\n'])]; 
 end
 
 %upper bounds
@@ -3215,9 +3003,9 @@ for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
         'v', {{'x1'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
 if ~isempty(o.K_ub)
@@ -3227,7 +3015,7 @@ if ~isempty(o.K_ub)
         code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'Inb_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3241,11 +3029,11 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
         'transpose', false, 'static', false,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
     if ~isempty(d)
-        data = [data, d, sprintf('\n')];
+        data = [data, d, sprintf('\n')]; %#ok
     end
-    code = [code, c, sprintf('\n\n')];
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-
+    
 end
 
 if ~isempty(o.K_n)
@@ -3255,7 +3043,7 @@ if ~isempty(o.K_n)
         code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
             sprintf(['\n',...
             '\t\t' 'Dn_times_muG_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
-        code = [code, sprintf(['\t' '}' '\n'])];
+        code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
 end
@@ -3271,7 +3059,7 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-    
+
 [d, c, in] = falcopt.generateMVMult(-alpha*eye(nu), ...
     'names', struct('fun', 'minus_scale_nu', 'M', {{'m_alpha'}},...
     'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
@@ -3281,28 +3069,13 @@ end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
-
-
-% [d,c, in] = falcopt.generateMVMult(o.Jac_m_struct,... % TO BE DELETED once ForceGradient is active
-%     'names',struct('fun', 'product_nc_nc', 'M', {{'B'}},...
-%     'v', {{'x'}}, 'r', 'r'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent, ...
-%     'static',false,...
-%     'symmetric',true);
-% if ~isempty(d)
-%     data = [data, d, sprintf('\n')];
-% end
-% code = [code, c, sprintf('\n\n')];
-% info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-
 for jj=1:length(o.K_nc)
     [~, c, in] = falcopt.generateMVMult(-alpha*eye(o.nc(o.K_nc{jj}(1))), ...
         'names', struct('fun', ['minus_scale_nc_' num2str(jj)], 'M', {{'m_alpha'}},...
         'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'static', true,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-    %     if ~isempty(d)
-    %         data = [data, d, sprintf('\n')];
-    %     end
-    code = [code, c, sprintf('\n\n')];
+
+    code = [code, c, sprintf('\n\n')]; %#ok
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     code = [code, sprintf([o.inline ' void product_matlab_nc_' num2str(jj) '(const ' o.real '* x, const '...
@@ -3310,7 +3083,7 @@ for jj=1:length(o.K_nc)
         '\t' 'unsigned int ii=0;' '\n\n',...
         '\t' 'for (ii=0;ii<%d;ii++)' '\n',...
         '\t\t' 'z[ii] = x[ii]*y[ii];' '\n\n',...
-        '}' '\n'],o.nc(o.K_nc{jj}(1)) )];
+        '}' '\n'],o.nc(o.K_nc{jj}(1)) )]; %#ok
     info.flops.mul = info.flops.mul+ o.nc(o.K_nc{jj}(1));
 end
 if ~isempty(o.K_nc)
@@ -3333,12 +3106,7 @@ if ~isempty(o.K_nc)
     code = [code, sprintf(['}' '\n'])];
 end
 
-% TODO incroporate Dn, dt
-if (o.contractive || o.terminal)
-        ter_struct = repmat({ones(nu,1)},1,o.N); % Activate when ready
-elseif o.forceGradient
-        ter_struct = repmat([],1,o.N); % Activate when ready
-end
+ter_struct = repmat([],1,o.N); 
 
 [c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.box_lowerBound), 'ub', ~isinf(o.box_upperBound)),  'types', o.real,'precision', o.precision, ...
     'indent', o.indent, 'inline', o.inline, 'verbose', max(0,o.verbose-1), 'test', o.test);
@@ -3350,185 +3118,132 @@ code = [code, sprintf(['\n' '/* Gradient step function */' '\n'])];
 code = [code, sprintf([o.inline ' void gradient_step(const ' o.real '* dot_J, const ' o.real '* u, const ' o.real '* sl,' '\n',...
     '\t' 'const ' o.real '* sl_sqr, const ' o.real '* gps' c_psi_dot_dec ', ' o.real '* du, ' o.real '* dsl, ' o.real '* muG){' '\n\n'])];
 
-if (o.forceGradient) % This if is to be deleted
+if ~isempty(o.Jac_n_struct)
     
-    if ~isempty(o.Jac_n_struct)
-        
-        % determine required size of Dn
-        size_Dn = 0;
-        for jj=1:length(o.K_n)
-            current_size_Dn = max(max(o.Jac_n_struct{o.K_n{jj}(1)}))*length(o.K_n{jj});
-            size_Dn = size_Dn + current_size_Dn;
-        end
-        
-        code = [code, sprintf(['\t' o.real ' Dn[%d];' '\n'],size_Dn)];
+    % determine required size of Dn
+    size_Dn = 0;
+    for jj=1:length(o.K_n)
+        current_size_Dn = max(max(o.Jac_n_struct{o.K_n{jj}(1)}))*length(o.K_n{jj});
+        size_Dn = size_Dn + current_size_Dn;
     end
     
-    code = [code, sprintf(['\t' o.real ' v_Nnc[%d], tmp_nu[%d], tmp_nc_m[%d], tmp_contr = 0.0;' '\n'],...
-        sum(o.nc), nu, max(o.nc))];
+    code = [code, sprintf(['\t' o.real ' Dn[%d];' '\n'],size_Dn)];
+end
+
+code = [code, sprintf(['\t' o.real ' v_Nnc[%d], tmp_nu[%d], tmp_nc_m[%d], tmp_contr = 0.0;' '\n'],...
+    sum(o.nc), nu, max(o.nc))];
+
+if ~isempty(o.K_lb)
+    code = [code, sprintf(['\t' o.real ' temp_lb[%i];' '\n'],o.nu)];
+end
+if ~isempty(o.K_ub)
+    code = [code, sprintf(['\t' o.real ' temp_ub[%i];' '\n'],o.nu)];
+end
+if ~isempty(o.K_n)
+    code = [code, sprintf(['\t' o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(cell2mat(o.nn)), o.nu)];
+end
+
+
+Dn_need = 0;
+Dn_need_vec = zeros(1,o.N);
+for ii = 1:o.N
     
+    code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
+    lb_size = 0;
+    ub_size = 0;
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' o.real ' temp_lb[%i];' '\n'],o.nu)];
+        code = [code, sprintf(['\t' 'build_vNnc_lb(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
+            sum(o.nc(1:ii-1)), (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)))]; %#ok
+        lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' o.real ' temp_ub[%i];' '\n'],o.nu)];
+        code = [code, sprintf(['\t' 'build_vNnc_ub(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
+            sum(o.nc(1:ii-1)) + lb_size, (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)) + lb_size )]; %#ok
+        ub_size = sum(~isinf(o.box_upperBound(:,ii)));
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(cell2mat(o.nn)), o.nu)];
-    end
-    
-    
-    Dn_need = 0;
-    Dn_need_vec = zeros(1,o.N);
-    for ii = 1:o.N
+        code = [code, sprintf(['\t' 'build_Dn(&u[%d], %i, &Dn[%d]);' '\n'], (ii-1)*nu, ii-1, Dn_need)]; %#ok
         
-        code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)];
-        lb_size = 0;
-        ub_size = 0;
-        if ~isempty(o.K_lb)
-            code = [code, sprintf(['\t' 'build_vNnc_lb(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
-                sum(o.nc(1:ii-1)), (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)))];
-            lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
-        end
-        if ~isempty(o.K_ub)
-            code = [code, sprintf(['\t' 'build_vNnc_ub(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
-                sum(o.nc(1:ii-1)) + lb_size, (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)) + lb_size )];
-            ub_size = sum(~isinf(o.box_upperBound(:,ii)));
-        end
-        if ~isempty(o.K_n)
-            code = [code, sprintf(['\t' 'build_Dn(&u[%d], %i, &Dn[%d]);' '\n'], (ii-1)*nu, ii-1, Dn_need)];
-            
-            code = [code, sprintf(['\t' 'Dntop_times_dotJ_n(&Dn[%i], &dot_J[%i], %i, &temp_n[0]);' '\n'],...
-                Dn_need, (ii-1)*o.nu, ii-1)];
-            
-            code = [code, sprintf(['\t' 'build_vNnc_n(&gps[%i], &temp_n[0], %i, &v_Nnc[%i]);' '\n'],...
-                sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1, sum(o.nc(1:ii-1)) + lb_size + ub_size )];
-            
-            
-            Dn_need = Dn_need + max(max(o.Jac_n_struct_hor{ii}));
-            Dn_need_vec(ii) = Dn_need;
-
-        end
+        code = [code, sprintf(['\t' 'Dntop_times_dotJ_n(&Dn[%i], &dot_J[%i], %i, &temp_n[0]);' '\n'],...
+            Dn_need, (ii-1)*o.nu, ii-1)]; %#ok
+        
+        code = [code, sprintf(['\t' 'build_vNnc_n(&gps[%i], &temp_n[0], %i, &v_Nnc[%i]);' '\n'],...
+            sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1, sum(o.nc(1:ii-1)) + lb_size + ub_size )]; %#ok
+        
+        
+        Dn_need = Dn_need + max(max(o.Jac_n_struct_hor{ii}));
+        Dn_need_vec(ii) = Dn_need;
+        
     end
-    
-    %         To be deleted
-    %         code = [code, sprintf(['\t\t' 'build_Dg(&u[ii*%d],Dg);' '\n'],nu)];
-    %         code = [code, sprintf(['\t\t' 'product_Dgtop_DJ(Dg_dot_J, &dot_J[ii*%d], Dg);' '\n'],nu)];
-    %         code = [code, sprintf(['\t\t' 'scale_sub_nc(&v_Nnc[ii*%d], &gps[ii*%d], Dg_dot_J); ' '\n'],nc,nc)];
-    if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
-    end
-    
-    % TODO: incorporate Dn when available
-    code = [code, sprintf(['\n' '\t' 'solveConstraintSystem(&muG[0], '])];
-    if ~isempty(o.K_n)
-        code = [code, sprintf(['&Dn[0], '])];
-    end
-    if (o.contractive || o.terminal)
-        code = [code, sprintf(['&dot_psi_N[0], '])];
-    end
-    code = [code, sprintf(['&v_Nnc[0], &sl_sqr[0]);' '\n'])];
-    
-    for ii = 1:o.N
-        code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)];
-        lb_size = 0;
-        ub_size = 0;
-        if ~isempty(o.K_lb)
-            code = [code, sprintf(['\t' 'minus_Ina_muG(&muG[%i], %i, &temp_lb[0]);' '\n'],...
-                sum(o.nc(1:ii-1)), ii-1)];
-            lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
-        end
-        if ~isempty(o.K_ub)
-            code = [code, sprintf(['\t' 'Inb_muG(&muG[%i], %i, &temp_ub[0]);' '\n'],...
-                sum(o.nc(1:ii-1)) + lb_size, ii-1)];
-            ub_size = sum(~isinf(o.box_upperBound(:,ii)));
-        end
-        if ~isempty(o.K_n)
-            code = [code, sprintf(['\t' 'Dn_times_muG_n(&Dn[%i], &muG[%i], %i, &temp_n2[0]);' '\n'],...
-                Dn_need_vec(ii) - Dn_need_vec(1), sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1)];
-        end
-
-        code = [code, sprintf(['\t' 'sum_nr_constr(&tmp_nu[0]'])];
-
-        if ~isempty(o.K_lb)
-            code = [code, ', &temp_lb[0]'];
-        end
-        if ~isempty(o.K_ub)
-            code = [code, ', &temp_ub[0]'];
-        end
-        if ~isempty(o.K_n)
-            code = [code, ', &temp_n2[0]'];
-        end
-        code = [code, sprintf([', &dot_J[%i]);' '\n'], nu*(ii-1))];
-
-        if (o.contractive || o.terminal)
-            code = [code, sprintf(['\t' 'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
-                '\n'], nu*(ii-1), sum(o.nc) - 1)];
-        end
-
-        code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
-            '\n'],(ii-1)*nu)];
-
-        code = [code, sprintf(['\t' 'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
-            '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )];
-        code = [code, sprintf(['\t' 'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
-            '\n'], ii-1, sum(o.nc(1:ii-1)) )];
-    end
-    if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
-    end
-    
-    code = [code, sprintf(['}' '\n\n'])];
-    
-    
-else % the following has to be deleted
-    
-    code = [code, sprintf(['\t' o.real ' M_tbi[%d], M[%d], Dg[%d], tmp_nc[%d], tmp_nu[%d], Dg_dot_J[%d], ' ...
-        'tmp_nc_m[%d];' '\n'], nc*nc, nc*nc, nc*nu, nc, nu, nc, nc)];
-    
-    code = [code, sprintf(['\t' 'unsigned int ii= 0;' '\n\n',...
-        '\t' 'for (ii= 0;ii<%d;ii++){' '\n'],N)];
-    code = [code, sprintf(['\t\t' 'build_Dg(&u[ii*%d],Dg);' '\n'],nu)];
-    
-    code = [code, sprintf(['\t\t' 'build_tbi(&u[ii*%d], &sl[ii*%d], M_tbi);' '\n'],nu,nc)];
-    code = [code, sprintf(['\t\t' 'build_inv(M, M_tbi); ' '\n'])];
-    
-    code = [code, sprintf(['\t\t' 'product_Dgtop_DJ(Dg_dot_J, &dot_J[ii*%d], Dg);'...
-        '\n'],nc)];
-    
-    code = [code, sprintf(['\t\t' 'scale_sub_nc(tmp_nc, &gps[ii*%d], Dg_dot_J); '...
-        '\n'],nc)];
-    
-    code = [code, sprintf(['\t\t' 'product_nc_nc(&muG[ii*%d], tmp_nc, M);'...
-        '\n'],nc)];
-    code = [code, sprintf(['\t\t' 'product_matrix_nu(tmp_nu, &dot_J[ii*%d], &muG[ii*%d], Dg);'...
-        '\n'],nu,nc)];
-    code = [code, sprintf(['\t\t' 'minus_scale_nu(&du[ii*%d], tmp_nu);'...
-        '\n'],nu)];
-    code = [code, sprintf(['\t\t' 'product_matlab_nc(&sl[ii*%d], &muG[ii*%d], tmp_nc_m);'...
-        '\n'],nc,nc)];
-    code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m);'...
-        '\n'],nc)];
-    code = [code, sprintf(['\t' '}' '\n'])];
-    code = [code, sprintf(['}' '\n\n'])];
-    
 end
+
+if (o.contractive || o.terminal)
+    code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
+        '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+end
+
+code = [code, sprintf(['\n' '\t' 'solveConstraintSystem(&muG[0], '])];
+if ~isempty(o.K_n)
+    code = [code, sprintf('&Dn[0], ')];
+end
+if (o.contractive || o.terminal)
+    code = [code, sprintf('&dot_psi_N[0], ')];
+end
+code = [code, sprintf(['&v_Nnc[0], &sl_sqr[0]);' '\n'])];
+
+for ii = 1:o.N
+    code = [code, sprintf(['\n' '\t' '/* loop unrolling: step %i of %i */' '\n'],ii-1,o.N-1)]; %#ok
+    lb_size = 0;
+    ub_size = 0;
+    if ~isempty(o.K_lb)
+        code = [code, sprintf(['\t' 'minus_Ina_muG(&muG[%i], %i, &temp_lb[0]);' '\n'],...
+            sum(o.nc(1:ii-1)), ii-1)]; %#ok
+        lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
+    end
+    if ~isempty(o.K_ub)
+        code = [code, sprintf(['\t' 'Inb_muG(&muG[%i], %i, &temp_ub[0]);' '\n'],...
+            sum(o.nc(1:ii-1)) + lb_size, ii-1)]; %#ok
+        ub_size = sum(~isinf(o.box_upperBound(:,ii)));
+    end
+    if ~isempty(o.K_n)
+        code = [code, sprintf(['\t' 'Dn_times_muG_n(&Dn[%i], &muG[%i], %i, &temp_n2[0]);' '\n'],...
+            Dn_need_vec(ii) - Dn_need_vec(1), sum(o.nc(1:ii-1)) + lb_size + ub_size, ii-1)]; %#ok
+    end
+    
+    code = [code, sprintf(['\t' 'sum_nr_constr(&tmp_nu[0]'])]; %#ok
+    
+    if ~isempty(o.K_lb)
+        code = [code, ', &temp_lb[0]']; %#ok
+    end
+    if ~isempty(o.K_ub)
+        code = [code, ', &temp_ub[0]']; %#ok
+    end
+    if ~isempty(o.K_n)
+        code = [code, ', &temp_n2[0]']; %#ok
+    end
+    code = [code, sprintf([', &dot_J[%i]);' '\n'], nu*(ii-1))]; %#ok
+    
+    if (o.contractive || o.terminal)
+        code = [code, sprintf(['\t' 'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
+            '\n'], nu*(ii-1), sum(o.nc) - 1)]; %#ok
+    end
+    
+    code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
+        '\n'],(ii-1)*nu)]; %#ok
+    
+    code = [code, sprintf(['\t' 'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
+        '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )]; %#ok
+    code = [code, sprintf(['\t' 'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
+        '\n'], ii-1, sum(o.nc(1:ii-1)) )]; %#ok
+end
+if (o.contractive || o.terminal)
+    code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+end
+
+code = [code, sprintf(['}' '\n\n'])];
 
 % multiply the for N the flops ( inside for-cycle)
 info.flops = falcopt.internal.multFlops( info.flops, N);
-
-% product_matrix_nc(a,x,B,y, z)
-% a is a static scalar, gpy is a nc dynamic vector, Dg is a nu*nc dynamic
-% mat and dot_J is nu dynamic
-% z = a*x - B'*y
-
-% [d,c] = falcopt.generateMVMult(ones(nu,nc),...
-%     'names',struct('fun', 'Btmul', 'M', {{'B'}},...
-%     'v', {{'x'}}, 'r', 'r'),...
-%     'static',false,...
-%     'transpose',true, 'verbose', o.verbose, 'test', o.test);
-
 
 end
 
@@ -3536,8 +3251,6 @@ function [code, data, info] = generate_build_gps(o)
 code = [];
 data = [];
 
-nc = o.nc(1);
-nu = o.nu;
 N = o.N;
 
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
@@ -3605,15 +3318,15 @@ ub = sum(~isinf(o.box_upperBound),1);
 
 for k = 1:o.N
     code = [code, sprintf(['\n',...
-        '\t' '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N -1)];
+        '\t' '/* Unrolling the for loop: iteration %i of %i */' '\n'], k-1, o.N -1)]; %#ok
     if ~isempty(o.K_lb)
-        code = [code, sprintf(['\t' 'build_amu(&u[%i],%i,&amu[0]);' '\n'], (k-1)*o.nu, k-1)];
+        code = [code, sprintf(['\t' 'build_amu(&u[%i],%i,&amu[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     if ~isempty(o.K_ub)
-        code = [code, sprintf(['\t' 'build_umb(&u[%i],%i,&umb[0]);' '\n'], (k-1)*o.nu, k-1)];
+        code = [code, sprintf(['\t' 'build_umb(&u[%i],%i,&umb[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     if ~isempty(o.K_n)
-        code = [code, sprintf(['\t' 'build_n(&u[%i],%i,&n[0]);' '\n'], (k-1)*o.nu, k-1)];
+        code = [code, sprintf(['\t' 'build_n(&u[%i],%i,&n[0]);' '\n'], (k-1)*o.nu, k-1)]; %#ok
     end
     
     code = [code, sprintf(['\t' 'build_gpsl_lowLevel('])]; %#ok
@@ -3633,11 +3346,6 @@ end
 
 code = [code, sprintf('\n')];
 
-% code = [code, sprintf(['\t' 'for (ii=0;ii<%d;ii++){' '\n',... % TBD
-%     '\t\t' 'build_g(u + ii*%d, g);' '\n',...
-%     '\t\t' 'half_sum_nc(gps+ ii*%d, g, sl_sqr + ii*%d);' '\n'...
-%     '\t' '}' '\n'],N,nu,nc,nc)];
-
 if (o.contractive || o.terminal)
     code = [code, sprintf(['\t' 'g_contr = *psi_N - c_contr;' '\n'...
         '\t' 'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
@@ -3650,7 +3358,7 @@ code = [code, sprintf(['}' '\n'])];
 
 
 info.flops.mul = info.flops.mul+ 3*N;
-% The flops of "build_g" are conuted outside this function (in generateConverter)
+% The flops of "build_g" are counted outside this function (in generateConverter)
 
 %% build_sqr
 
@@ -3705,7 +3413,6 @@ function [code, data] = generate_copy(o)
 
 nx = o.nx;
 nu = o.nu;
-nc = o.nc(1);
 N = o.N;
 
 code = [];
@@ -3789,38 +3496,11 @@ end
 check = sprintf([indent 'if(' strjoin(rangeStrs, ' || ') ') {']);
 end
 
-% function check = generateCheck(K, indent, string) % TO BE DELETED
-% ranges = reshape([K([diff(K)-1 ~= 0 false]); K([false diff(K)-1 ~= 0])],[],1)';
-% if length(K) > 1 && K(1)+1 == K(2)
-%     ranges = [K(1) ranges]; %#ok
-% elseif length(K) == 1
-%     ranges = [K(1) K(1)];
-% end
-% if mod(length(ranges),2) == 1
-%     ranges = [ranges K(end)]; %#ok
-% end
-% ranges = reshape(ranges,2,length(ranges)/2);
-% rangeStrs = cell(1,size(ranges,2));
-% for j=1:size(ranges,2)
-%     if ranges(1,j) == ranges(2,j)
-%         rangeStrs{j} = sprintf([string ' == ' num2str(ranges(2,j)-1) ]);
-%     elseif ranges(1,j) < ranges(2,j)
-%         rangeStrs{j} = sprintf([num2str(ranges(1,j)-1) ' <= ' string ' <= ' num2str(ranges(2,j)-1)]);
-%     else
-%         throw(MException('ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
-%     end
-% end
-% check = sprintf([indent 'if(' strjoin(rangeStrs, ' || ') ') {']);
-% end
-
 function [code, data, info, optCode] = generate_difference(o)
 % generate  diff_Nnc
 
 data = [];
 code = [];
-
-nc = o.nc(1);
-N = o.N;
 
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
@@ -3844,9 +3524,6 @@ function [code, data, info] = generate_det_phi(o)
 code = [];
 data = [];
 info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
-
-nc = o.nc(1);
-N = o.N;
 
 code = [code, sprintf(['\n' '/* It computes the merit function phi */' '\n'])];
 code = [code, sprintf([o.inline ' void det_phi (const ' o.real ' J, const ' o.real '* gps, const ',...
@@ -3930,9 +3607,6 @@ code = [];
 data = [];
 info.flops.it = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
-
-nc = o.nc(1);
-N = o.N;
 
 %% define one norm and inf norm of dimension N*nc
 
