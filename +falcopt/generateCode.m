@@ -840,10 +840,6 @@ optCode = [optCode, sprintf(['\n' '\t\t' '/* Compute the gradient step, projecte
     'du: primal variable gradient steps, dsl: slack variables, muG: dual variables */' '\n'])];
 optCode = [optCode, sprintf(['\t\t' 'gradient_step(dot_J, u, sl, sl_sqr, gps' c_psi_dot_use ', du, dsl, muG);' '\n\n'])];
 
-% optCode = [optCode, sprintf(['if (it==2) {\n copy_Nnu(u,muG+30); return;}; \n'])]; % DEBUG
-
-% optCode = [optCode, sprintf(['copy_Nnu(u,muG); \n return; \n'])]; % DEBUG
-
 optCode = [optCode, sprintf(['\t\t' 'dot_product_Nnu(&du_sqr, du, du);' '\n',...
     '\t\t' 'dot_product_Nnu(&u_sqr, u, u);' '\n'])];
 
@@ -1003,9 +999,7 @@ if o.merit_function == 0
     optCode = [optCode, sprintf([...
         '\t\t\t\t' 'build_sqr_Nnc(slp, slp_sqr);' '\n',...
         '\t\t\t\t' 'build_gpsl(up' c_psip_use c_contr_use ',slp_sqr, gpsp);' '\n'])];
-    
-    %     optCode = [optCode, sprintf(['if (it==1) {copy_Nnu(u,gpsp + 30); \n return;}; \n'])]; % DEBUG
-    
+       
     optCode = [optCode, sprintf(['\n' '\t\t\t\t' '/* Compute the merit function phit (function of the step size t) */' '\n'])];
     if o.merit_function == 0
         optCode = [optCode, sprintf(['\t\t\t\t' 'det_phi (Jt,gpsp,mup,rho,&phit);' '\n'])];
