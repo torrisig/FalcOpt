@@ -672,17 +672,39 @@ function [code, info] = generateConstraintInv(varargin)
     code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int i;' '\n'])];
     code = [code, sprintf([options.indent.code options.indent.generic '/* Variables to store intermediate results */' '\n'])];
     % TODO make statically allocated?
-    code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.D1 '[' num2str(max(dims.mD1)) '];' ' '])];
-    code = [code, sprintf([options.types.data ' ' names.D2 '[' num2str(max(dims.mD2)) '];' '\n'])];
+    if max(dims.mD1) > 0 || max(dims.mD2) > 0
+        code = [code, sprintf([options.indent.code options.indent.generic])];
+    end
+    if max(dims.mD1) > 0
+        code = [code, sprintf([options.types.data ' ' names.D1 '[' num2str(max(dims.mD1)) '];' ' '])];
+    end
+    if max(dims.mD2) > 0
+        code = [code, sprintf([options.types.data ' ' names.D2 '[' num2str(max(dims.mD2)) '];'])];
+    end
+    if max(dims.mD1) > 0 || max(dims.mD2) > 0
+        code = [code sprintf('\n')];
+    end
     if max(dims.np) > 0
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.r1 '[' num2str(max(dims.np)) '];' ' '])];
         code = [code, sprintf([options.types.data ' ' names.r2 '[' num2str(max(dims.np)) '];' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.M '[' num2str(max(dims.mM)) ']; /* Temporary variable for storing matrix */' '\n'])]; 
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.Mi '[' num2str(max(max(dims.mMi), max(dims.mp))) ']; /* Temporary variable for storing inverse of ' names.M ' */' '\n'])];
-        code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.m1 '[' num2str(max(dims.mm1)) '];' ' '])];
-        code = [code, sprintf([options.types.data ' ' names.m2 '[' num2str(max(dims.mm2)) '];' '\n'])];
+        if max(dims.mm1) > 0 || max(dims.mm2) > 0
+            code = [code, sprintf([options.indent.code options.indent.generic])];
+        end
+        if max(dims.mm1) > 0
+            code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.m1 '[' num2str(max(dims.mm1)) '];' ' '])];
+        end
+        if max(dims.mm2) > 0
+            code = [code, sprintf([options.types.data ' ' names.m2 '[' num2str(max(dims.mm2)) '];'])];
+        end
+        if max(dims.mm1) > 0 || max(dims.mm2) > 0
+            code = [code sprintf('\n')];
+        end
     end
-    code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tmp '[' num2str(max(sum(options.bounds.lb | options.bounds.ub,1))) '];' '\n'])];
+    if max(sum(options.bounds.lb | options.bounds.ub,1)) > 0
+        code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tmp '[' num2str(max(sum(options.bounds.lb | options.bounds.ub,1))) '];' '\n'])];
+    end
     if max(dims.nt) > 0
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.gamma ' = -' names.v '[' num2str(sum(dims.lb)+sum(dims.ub)+sum(dims.np)) ']; /* Initialize ' names.gamma ' with last element of ' names.v ' */' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' ' names.tau ' = ' names.slacks '[' num2str(sum(dims.lb)+sum(dims.ub)+sum(dims.np)) ']; /* Initialize ' names.tau ' with the last element of ' names.slacks ' plus the squared 2-norm of ' names.dt ' (later) */' '\n'])];
@@ -720,12 +742,22 @@ function [code, info] = generateConstraintInv(varargin)
         if max(dims.np) > 0
             code = [code, sprintf([', ' names.M])]; %#ok
             code = [code, sprintf([', ' names.Mi])]; %#ok
-            code = [code, sprintf([', ' names.m1])]; %#ok
-            code = [code, sprintf([', ' names.m2])]; %#ok
+            if max(dims.mm1) > 0
+                code = [code, sprintf([', ' names.m1])]; %#ok
+            end
+            if max(dims.mm2) > 0
+                code = [code, sprintf([', ' names.m2])]; %#ok
+            end
         end
-        code = [code, sprintf([', ' names.D1])]; %#ok
-        code = [code, sprintf([', ' names.D2])]; %#ok
-        code = [code, sprintf([', ' names.tmp])]; %#ok
+        if max(dims.mD1) > 0
+            code = [code, sprintf([', ' names.D1])]; %#ok
+        end
+        if max(dims.mD2) > 0
+            code = [code, sprintf([', ' names.D2])]; %#ok
+        end
+        if max(sum(options.bounds.lb | options.bounds.ub,1)) > 0
+            code = [code, sprintf([', ' names.tmp])]; %#ok
+        end
         if max(dims.np) > 0
             code = [code, sprintf([', ' names.Mi])]; %#ok Is not a bug, we use Mi also as temporary matrix
         end
@@ -1080,9 +1112,21 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
     docu = sprintf([options.indent.code '/** ' '\n' ...
                     options.indent.code ' * @brief Processe slacks and generate matrices ']);
     if max(dims.np) > 0
-        docu = [docu sprintf([names.M ', ' names.m1 ', ' names.m2 ' as well as '])];
+        if max(dims.mm1) > 0 && max(dims.mm2) > 0
+            docu = [docu sprintf([names.M ', ' names.m1 ', ' names.m2 ' as well as '])];
+        elseif max(dims.mm1) > 0
+            docu = [docu sprintf([names.M ' and ' names.m1 ' as well as '])];
+        elseif max(dims.mm2) > 0
+            docu = [docu sprintf([names.M ' and ' names.m2 ' as well as '])];
+        end
     end
-    docu = [docu sprintf([names.D1 ' and ' names.D2 '.' '\n'])];
+    if max(dims.mD1) > 0 && num2str(max(dims.mD2)) > 0
+        docu = [docu sprintf([names.D1 ' and ' names.D2 '.' '\n'])];
+    elseif max(dims.mD1) > 0
+        docu = [docu sprintf([names.D1 '.' '\n'])];
+    elseif max(dims.mD2) > 0
+        docu = [docu sprintf([names.D2 '.' '\n'])];
+    end
     code = sprintf([options.indent.code 'static ' options.inline ' void ' names.fun '_' names.processSlacks '(']);
     bFirst = true;
     % Slacks
@@ -1194,7 +1238,7 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         code = [code sprintf([options.types.data '* ' names.Mi])];
     end
     % m1
-    if max(dims.np) > 0
+    if max(dims.np) > 0 && max(dims.mm1) > 0
         docu = [docu sprintf([options.indent.code ' * @param ' names.m1 ' Return value.'])];
         if ~all(cellfun(@(c)(isfield(c,'elements')),structure.m1)) || ~all(cellfun(@(c)(c.elements.M.num),structure.m1) == structure.m1{1}.elements.M.num)
             docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.m1 ' '])) ' A matrix with '])];
@@ -1221,7 +1265,7 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         code = [code sprintf([options.types.data '* ' names.m1])];
     end
     % m2
-    if max(dims.np) > 0
+    if max(dims.np) > 0 && max(dims.mm2) > 0
         docu = [docu sprintf([options.indent.code ' * @param ' names.m2 ' Return value.'])];
         if ~all(cellfun(@(c)(isfield(c,'elements')),structure.m2)) || ~all(cellfun(@(c)(c.elements.M.num),structure.m2) == structure.m2{1}.elements.M.num)
             docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.m2 ' '])) ' A matrix with '])];
@@ -1248,63 +1292,69 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         code = [code sprintf([options.types.data '* ' names.m2])];
     end
     % D1
-    docu = [docu sprintf([options.indent.code ' * @param ' names.D1 ' Return value.'])];
-    if ~all(cellfun(@(c)(isfield(c,'elements')),structure.D1)) || ~all(cellfun(@(c)(c.elements.M.num),structure.D1) == structure.D1{1}.elements.M.num)
-        docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.D1 ' '])) ' A matrix with '])];
-        for k=1:options.N-1
-            if ~isempty(structure.D1{indices.bounds.i(k)})
-                docu = [docu sprintf([num2str(structure.D1{indices.bounds.i(k)}.elements.M.num) '(k=' num2str(k-1) '), '])]; %#ok
-            else
-                docu = [docu sprintf(['0(k=' num2str(k-1) '), '])]; %#ok
+    if max(dims.mD1) > 0
+        docu = [docu sprintf([options.indent.code ' * @param ' names.D1 ' Return value.'])];
+        if ~all(cellfun(@(c)(isfield(c,'elements')),structure.D1)) || ~all(cellfun(@(c)(c.elements.M.num),structure.D1) == structure.D1{1}.elements.M.num)
+            docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.D1 ' '])) ' A matrix with '])];
+            for k=1:options.N-1
+                if ~isempty(structure.D1{indices.bounds.i(k)})
+                    docu = [docu sprintf([num2str(structure.D1{indices.bounds.i(k)}.elements.M.num) '(k=' num2str(k-1) '), '])]; %#ok
+                else
+                    docu = [docu sprintf(['0(k=' num2str(k-1) '), '])]; %#ok
+                end
             end
-        end
-        if ~isempty(structure.D1{indices.bounds.i(options.N)})
-            docu = [docu sprintf(['or ' num2str(structure.D1{indices.bounds.i(options.N)}.elements.M.num) '(k=' num2str(options.N-1) ') elements.' '\n'])];
+            if ~isempty(structure.D1{indices.bounds.i(options.N)})
+                docu = [docu sprintf(['or ' num2str(structure.D1{indices.bounds.i(options.N)}.elements.M.num) '(k=' num2str(options.N-1) ') elements.' '\n'])];
+            else
+                docu = [docu sprintf(['or 0(k=' num2str(options.N-1) ') elements.' '\n'])];
+            end
         else
-            docu = [docu sprintf(['or 0(k=' num2str(options.N-1) ') elements.' '\n'])];
+            docu = [docu sprintf([' A matrix with ' num2str(structure.D1{1}.elements.M.num) ' elements.' '\n'])];
         end
-    else
-        docu = [docu sprintf([' A matrix with ' num2str(structure.D1{1}.elements.M.num) ' elements.' '\n'])];
+        if ~bFirst
+            code = [code sprintf(', ')];
+        else
+            bFirst = false;
+        end
+        code = [code sprintf([options.types.data '* ' names.D1])];
     end
-    if ~bFirst
-        code = [code sprintf(', ')];
-    else
-        bFirst = false;
-    end
-    code = [code sprintf([options.types.data '* ' names.D1])];
     % D2
-    docu = [docu sprintf([options.indent.code ' * @param ' names.D2 ' Return value.'])];
-    if ~all(cellfun(@(c)(isfield(c,'elements')),structure.D2)) || ~all(cellfun(@(c)(c.elements.M.num),structure.D2) == structure.D2{1}.elements.M.num)
-        docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.D2 ' '])) ' A matrix with '])];
-        for k=1:options.N-1
-            if ~isempty(structure.D2{indices.bounds.i(k)})
-                docu = [docu sprintf([num2str(structure.D2{indices.bounds.i(k)}.elements.M.num) '(k=' num2str(k-1) '), '])]; %#ok
-            else
-                docu = [docu sprintf(['0(k=' num2str(k-1) '), '])]; %#ok
+    if max(dims.mD2) > 0
+        docu = [docu sprintf([options.indent.code ' * @param ' names.D2 ' Return value.'])];
+        if ~all(cellfun(@(c)(isfield(c,'elements')),structure.D2)) || ~all(cellfun(@(c)(c.elements.M.num),structure.D2) == structure.D2{1}.elements.M.num)
+            docu = [docu sprintf(['\n' options.indent.code ' * ' repmat(' ',1,length(['@param ' names.D2 ' '])) ' A matrix with '])];
+            for k=1:options.N-1
+                if ~isempty(structure.D2{indices.bounds.i(k)})
+                    docu = [docu sprintf([num2str(structure.D2{indices.bounds.i(k)}.elements.M.num) '(k=' num2str(k-1) '), '])]; %#ok
+                else
+                    docu = [docu sprintf(['0(k=' num2str(k-1) '), '])]; %#ok
+                end
             end
-        end
-        if ~isempty(structure.D2{indices.bounds.i(options.N)})
-            docu = [docu sprintf(['or ' num2str(structure.D2{indices.bounds.i(options.N)}.elements.M.num) '(k=' num2str(options.N-1) ') elements.' '\n'])];
+            if ~isempty(structure.D2{indices.bounds.i(options.N)})
+                docu = [docu sprintf(['or ' num2str(structure.D2{indices.bounds.i(options.N)}.elements.M.num) '(k=' num2str(options.N-1) ') elements.' '\n'])];
+            else
+                docu = [docu sprintf(['or 0(k=' num2str(options.N-1) ') elements.' '\n'])];
+            end
         else
-            docu = [docu sprintf(['or 0(k=' num2str(options.N-1) ') elements.' '\n'])];
+            docu = [docu sprintf([' A matrix with ' num2str(structure.D2{1}.elements.M.num) ' elements.' '\n'])];
         end
-    else
-        docu = [docu sprintf([' A matrix with ' num2str(structure.D2{1}.elements.M.num) ' elements.' '\n'])];
+        if ~bFirst
+            code = [code sprintf(', ')];
+        else
+            bFirst = false;
+        end
+        code = [code sprintf([options.types.data '* ' names.D2])];
     end
-    if ~bFirst
-        code = [code sprintf(', ')];
-    else
-        bFirst = false;
-    end
-    code = [code sprintf([options.types.data '* ' names.D2])];
     % tmp vector
-    docu = [docu sprintf([options.indent.code ' * @param ' localNames.tmp ' A vector of dimension ' num2str(max(dims.bd)) ' used for storing intermediate results.' '\n'])];
-    if ~bFirst
-        code = [code sprintf(', ')];
-    else
-        bFirst = false;
+    if max(sum(options.bounds.lb | options.bounds.ub,1)) > 0
+        docu = [docu sprintf([options.indent.code ' * @param ' localNames.tmp ' A vector of dimension ' num2str(max(dims.bd)) ' used for storing intermediate results.' '\n'])];
+        if ~bFirst
+            code = [code sprintf(', ')];
+        else
+            bFirst = false;
+        end
+        code = [code sprintf([options.types.data '* ' localNames.tmp])];
     end
-    code = [code sprintf([options.types.data '* ' localNames.tmp])];
     if max(dims.np) > 0
         % T matrix
         docu = [docu sprintf([options.indent.code ' * @param ' localNames.T ' A vector (matrix) of dimension ' num2str(max(dims.mp)) ' used for storing intermediate results.' '\n'])];
@@ -1462,7 +1512,8 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
     end
         
     %% Construct m1 and m2
-    code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.m1 ' and ' names.m2 ', where' '\n' ...
+    if max(dims.mm1) > 0 && max(dims.mm2) > 0
+        code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.m1 ' and ' names.m2 ', where' '\n' ...
                           options.indent.code options.indent.generic '     ' names.m1 ' = -diag({S_i}_{i=1}^L)*' names.dp '_k(L), where ' names.dp '_k(L) is a matrix with the rows of ' names.dp '_k for which u_k has lower bounds and' '\n' ...
                           options.indent.code options.indent.generic '                      with S_i = 1/(1+' localNames.s '_{k,i}) if i-th lower bound of u has no corresponding upper bound' '\n' ...
                           options.indent.code options.indent.generic '                               = ' localNames.s '_{k,L+j}/(' localNames.s '_{k,i}*' localNames.s '_{k,L+j} + ' localNames.s '_{k,i} + ' localNames.s '_{k,L+j})' ...
@@ -1471,6 +1522,19 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
                           options.indent.code options.indent.generic '                     with S_i = 1/(1+' localNames.s '_{k,L+i}) if i-th upper bound of u has no corresponding lower bound' '\n' ...
                           options.indent.code options.indent.generic '                              = ' localNames.s '_{k,j}/(' localNames.s '_{k,L+i}*' localNames.s '_{k,j} + ' localNames.s '_{k,L+i} + ' localNames.s '_{k,j})' ...
                                                                            'if the j-th lower bound of u corresponds to the i-th upper bound ("corresponds" means that they bound the same component of u)' '**/' '\n'])];
+    elseif max(dims.mm1) > 0
+        code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.m1 ', where' '\n' ...
+                          options.indent.code options.indent.generic '     ' names.m1 ' = -diag({S_i}_{i=1}^L)*' names.dp '_k(L), where ' names.dp '_k(L) is a matrix with the rows of ' names.dp '_k for which u_k has lower bounds and' '\n' ...
+                          options.indent.code options.indent.generic '                      with S_i = 1/(1+' localNames.s '_{k,i}) if i-th lower bound of u has no corresponding upper bound' '\n' ...
+                          options.indent.code options.indent.generic '                               = ' localNames.s '_{k,L+j}/(' localNames.s '_{k,i}*' localNames.s '_{k,L+j} + ' localNames.s '_{k,i} + ' localNames.s '_{k,L+j})' ...
+                                                                           'if the j-th upper bound of u corresponds to the i-th lower bound ("corresponds" means that they bound the same component of u)' '**/' '\n'])];
+    elseif max(dims.mm2) > 0
+        code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.m2 ', where' '\n' ...
+                          options.indent.code options.indent.generic '     ' names.m2 ' = diag({S_i}_{i=1}^U)*' names.dp '_k(U), where ' names.dp '_k(U) is a matrix with the rows of ' names.dp '_k for which u_k has upper bounds and' '\n' ...
+                          options.indent.code options.indent.generic '                     with S_i = 1/(1+' localNames.s '_{k,L+i}) if i-th upper bound of u has no corresponding lower bound' '\n' ...
+                          options.indent.code options.indent.generic '                              = ' localNames.s '_{k,j}/(' localNames.s '_{k,L+i}*' localNames.s '_{k,j} + ' localNames.s '_{k,L+i} + ' localNames.s '_{k,j})' ...
+                                                                           'if the j-th lower bound of u corresponds to the i-th upper bound ("corresponds" means that they bound the same component of u)' '**/' '\n'])];
+    end
 	% Structure of m1/m2 only depends on lb/ub and dp, however the values of both depend on lb, ub and dp
     for i=1:indices.bdAndDp.n
         % Construct check
@@ -1488,23 +1552,23 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         if ~isempty(structure.m1{m1Idx})
             if structure.m1{m1Idx}.elements.M.num > 0
                 code = [code, sprintf([indent '/* Construct ' names.m1 ' */' '\n'])]; %#ok
-            end
-            for j=1:structure.m1{m1Idx}.elements.M.num
-                % Get index of considered row of dp (component index of u)
-                idx = find(cumsum(options.bounds.lb(:,k)) == structure.m1{m1Idx}.elements.M.row(j), 1, 'first');
-                dpElIdx = structure.dp{dpIdx}.elements.M.data.indices(structure.dp{dpIdx}.elements.M.data.row == idx & structure.dp{dpIdx}.elements.M.data.col == structure.m1{m1Idx}.elements.M.col(j));
-                % If there is also an upper upper bound corresponding to the current row of dp
-                if options.bounds.ub(idx,k)
-                    code = [code sprintf([indent names.m1 '[' num2str(j-1) '] = -' localNames.s '[' num2str(dims.lb(k)) '+' num2str(sum(options.bounds.ub(1:idx,k))-1) ']' ... 
-                                                                              '*' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']' ... 
-                                                                              '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
-                                                                              '/* Element #' num2str(j) ' of ' names.m1 ' (' num2str(structure.m1{m1Idx}.elements.M.row(j)) ',' num2str(structure.m1{m1Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
-                    info.flops.mul = info.flops.mul+2*length(indices.lbAndDp.map{m1Idx});
-                else
-                    code = [code sprintf([indent names.m1 '[' num2str(j-1) '] = -' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']' ... 
-                                                                              '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
-                                                                              '/* Element #' num2str(j) ' of ' names.m1 ' (' num2str(structure.m1{m1Idx}.elements.M.row(j)) ',' num2str(structure.m1{m1Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
-                    info.flops.mul = info.flops.mul+1*length(indices.lbAndDp.map{m1Idx});
+                for j=1:structure.m1{m1Idx}.elements.M.num
+                    % Get index of considered row of dp (component index of u)
+                    idx = find(cumsum(options.bounds.lb(:,k)) == structure.m1{m1Idx}.elements.M.row(j), 1, 'first');
+                    dpElIdx = structure.dp{dpIdx}.elements.M.data.indices(structure.dp{dpIdx}.elements.M.data.row == idx & structure.dp{dpIdx}.elements.M.data.col == structure.m1{m1Idx}.elements.M.col(j));
+                    % If there is also an upper upper bound corresponding to the current row of dp
+                    if options.bounds.ub(idx,k)
+                        code = [code sprintf([indent names.m1 '[' num2str(j-1) '] = -' localNames.s '[' num2str(dims.lb(k)) '+' num2str(sum(options.bounds.ub(1:idx,k))-1) ']' ... 
+                                                                                  '*' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']' ... 
+                                                                                  '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
+                                                                                  '/* Element #' num2str(j) ' of ' names.m1 ' (' num2str(structure.m1{m1Idx}.elements.M.row(j)) ',' num2str(structure.m1{m1Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
+                        info.flops.mul = info.flops.mul+2*length(indices.lbAndDp.map{m1Idx});
+                    else
+                        code = [code sprintf([indent names.m1 '[' num2str(j-1) '] = -' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']' ... 
+                                                                                  '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
+                                                                                  '/* Element #' num2str(j) ' of ' names.m1 ' (' num2str(structure.m1{m1Idx}.elements.M.row(j)) ',' num2str(structure.m1{m1Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
+                        info.flops.mul = info.flops.mul+1*length(indices.lbAndDp.map{m1Idx});
+                    end
                 end
             end
         else
@@ -1515,23 +1579,23 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         if ~isempty(structure.m2{m2Idx})
             if structure.m1{m2Idx}.elements.M.num > 0
                 code = [code, sprintf([indent '/* Construct ' names.m2 ' */' '\n'])]; %#ok
-            end
-            for j=1:structure.m2{m2Idx}.elements.M.num
-                % Get index of considered row of dp (component index of u)
-                idx = find(cumsum(options.bounds.ub(:,k)) == structure.m2{m2Idx}.elements.M.row(j), 1, 'first');
-                dpElIdx = structure.dp{dpIdx}.elements.M.data.indices(structure.dp{dpIdx}.elements.M.data.row == idx & structure.dp{dpIdx}.elements.M.data.col == structure.m2{m2Idx}.elements.M.col(j));
-                % If there is also an upper upper bound corresponding to the current row of dp
-                if options.bounds.lb(idx,k)
-                    code = [code sprintf([indent names.m2 '[' num2str(j-1) '] = ' localNames.s '[' num2str(sum(options.bounds.lb(1:idx,k))-1) ']' ... 
-                                                                              '*' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']' ... 
-                                                                              '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
-                                                                              '/* Element #' num2str(j) ' of ' names.m2 ' (' num2str(structure.m2{m2Idx}.elements.M.row(j)) ',' num2str(structure.m2{m2Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
-                    info.flops.mul = info.flops.mul+2*length(indices.ubAndDp.map{m2Idx});
-                else
-                    code = [code sprintf([indent names.m2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']' ... 
-                                                                              '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
-                                                                              '/* Element #' num2str(j) ' of ' names.m2 ' (' num2str(structure.m2{m2Idx}.elements.M.row(j)) ',' num2str(structure.m2{m2Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
-                    info.flops.mul = info.flops.mul+1*length(indices.ubAndDp.map{m2Idx});
+                for j=1:structure.m2{m2Idx}.elements.M.num
+                    % Get index of considered row of dp (component index of u)
+                    idx = find(cumsum(options.bounds.ub(:,k)) == structure.m2{m2Idx}.elements.M.row(j), 1, 'first');
+                    dpElIdx = structure.dp{dpIdx}.elements.M.data.indices(structure.dp{dpIdx}.elements.M.data.row == idx & structure.dp{dpIdx}.elements.M.data.col == structure.m2{m2Idx}.elements.M.col(j));
+                    % If there is also an upper upper bound corresponding to the current row of dp
+                    if options.bounds.lb(idx,k)
+                        code = [code sprintf([indent names.m2 '[' num2str(j-1) '] = ' localNames.s '[' num2str(sum(options.bounds.lb(1:idx,k))-1) ']' ... 
+                                                                                  '*' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']' ... 
+                                                                                  '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
+                                                                                  '/* Element #' num2str(j) ' of ' names.m2 ' (' num2str(structure.m2{m2Idx}.elements.M.row(j)) ',' num2str(structure.m2{m2Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
+                        info.flops.mul = info.flops.mul+2*length(indices.ubAndDp.map{m2Idx});
+                    else
+                        code = [code sprintf([indent names.m2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']' ... 
+                                                                                  '*' names.dp '[' num2str(dpElIdx-1) ']; ' ...
+                                                                                  '/* Element #' num2str(j) ' of ' names.m2 ' (' num2str(structure.m2{m2Idx}.elements.M.row(j)) ',' num2str(structure.m2{m2Idx}.elements.M.col(j)) ') */' '\n'])]; %#ok
+                        info.flops.mul = info.flops.mul+1*length(indices.ubAndDp.map{m2Idx});
+                    end
                 end
             end
         else
@@ -1546,7 +1610,13 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
     %% Construct D1, D2
     % TODO add docu
     if indices.bounds.n > 0
-        code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D1 ' and ' names.D2 ', where' ' **/' '\n'])];
+        if max(dims.mD1) > 0 && max(dims.mD2) > 0
+            code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D1 ' and ' names.D2 ', where' ' **/' '\n'])];
+        elseif max(dims.mD1) > 0
+            code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D1 ', where' ' **/' '\n'])];
+        elseif max(dims.mD2) > 0
+            code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D2 ', where' ' **/' '\n'])];
+        end
     end
     for i=1:indices.bounds.n
         % Construct check
