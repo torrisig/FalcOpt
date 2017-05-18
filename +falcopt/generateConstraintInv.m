@@ -1545,7 +1545,9 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
     
     %% Construct D1, D2
     % TODO add docu
-    code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D1 ' and ' names.D2 ', where' ' **/' '\n'])];
+    if indices.bounds.n > 0
+        code = [code sprintf([options.indent.code options.indent.generic '/** Construct ' names.D1 ' and ' names.D2 ', where' ' **/' '\n'])];
+    end
     for i=1:indices.bounds.n
         % Construct check
         if indices.bounds.n > 1
@@ -1557,79 +1559,79 @@ function [code, info] = generateSlacksCode(structure, indices, names, dims, opti
         end
         k = indices.bounds.k(i); % First stage of i-th unique combination
         % Iterate over non-zero elements of D1
-        if structure.D1{i}.elements.M.num > 0
+        if isfield(structure.D1{i}, 'elements') && structure.D1{i}.elements.M.num > 0
             code = [code, sprintf([indent '/* Construct ' names.D1 ' */' '\n'])]; %#ok
-        end
-        for j=1:structure.D1{i}.elements.M.num
-            % "Diagonal" part of D1
-            if structure.D1{i}.elements.M.row(j) <= dims.lb(k)
-                % Sanity check
-                if ~options.bounds.lb(indices.lb.j(i,structure.D1{i}.elements.M.row(j)),k)
+            for j=1:structure.D1{i}.elements.M.num
+                % "Diagonal" part of D1
+                if structure.D1{i}.elements.M.row(j) <= dims.lb(k)
+                    % Sanity check
+                    if ~options.bounds.lb(indices.lb.j(i,structure.D1{i}.elements.M.row(j)),k)
+                        throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
+                    end
+                    idx = indices.lb.j(i,structure.D1{i}.elements.M.row(j)); % Index of component of u corresponding to row(j)-th lower bound
+                    code = [code sprintf([indent names.D1 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']'])]; %#ok
+                    % If the row(j)-th lower bound has a corresponding upper bound
+                    if options.bounds.ub(idx,k)
+                        code = [code sprintf(['*(1.0 + ' localNames.s '[' num2str(dims.lb(k)) '+' num2str(sum(options.bounds.ub(1:idx,k))-1) '])'])]; %#ok
+                        info.flops.add = info.flops.add + 1*length(indices.bounds.map{i});
+                        info.flops.mul = info.flops.mul + 1*length(indices.bounds.map{i});
+                    end
+                    code = [code sprintf(['; ' '/* Element #' num2str(j) ' of ' names.D1 ' (' num2str(structure.D1{i}.elements.M.row(j)) ',' num2str(structure.D1{i}.elements.M.col(j)) ')' ...
+                                               ', corresponds to lower bound #' num2str(structure.D1{i}.elements.M.row(j))])]; %#ok
+                    if options.bounds.ub(idx,k)
+                        code = [code sprintf([' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k)))])]; %#ok
+                    end
+                    code = [code sprintf([', component (' num2str(idx) ') */' '\n'])]; %#ok
+                % "Off-Diagonal" part of D1
+                elseif indices.lb.j(i,structure.D1{i}.elements.M.col(j)) == indices.ub.j(i,structure.D1{i}.elements.M.row(j)-dims.lb(k)) % Sanity check, should always be true
+                    idx = indices.lb.j(i,structure.D1{i}.elements.M.col(j));
+                    if sum(options.bounds.lb(1:idx,k)) ~= structure.D1{i}.elements.M.col(j) || sum(options.bounds.ub(1:idx,k)) ~= structure.D1{i}.elements.M.row(j)-dims.lb(k)
+                        throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
+                    end
+                    code = [code sprintf([indent names.D1 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']; ' ...
+                                          '/* Element #' num2str(j) ' of ' names.D1 ' (' num2str(structure.D1{i}.elements.M.row(j)) ',' num2str(structure.D1{i}.elements.M.col(j)) ')' ...
+                                          ', corresponds to lower bound #' num2str(sum(options.bounds.lb(1:idx,k))) ' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k))) ' */' '\n'])]; %#ok
+                else
                     throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
                 end
-                idx = indices.lb.j(i,structure.D1{i}.elements.M.row(j)); % Index of component of u corresponding to row(j)-th lower bound
-                code = [code sprintf([indent names.D1 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']'])]; %#ok
-                % If the row(j)-th lower bound has a corresponding upper bound
-                if options.bounds.ub(idx,k)
-                    code = [code sprintf(['*(1.0 + ' localNames.s '[' num2str(dims.lb(k)) '+' num2str(sum(options.bounds.ub(1:idx,k))-1) '])'])]; %#ok
-                    info.flops.add = info.flops.add + 1*length(indices.bounds.map{i});
-                    info.flops.mul = info.flops.mul + 1*length(indices.bounds.map{i});
-                end
-                code = [code sprintf(['; ' '/* Element #' num2str(j) ' of ' names.D1 ' (' num2str(structure.D1{i}.elements.M.row(j)) ',' num2str(structure.D1{i}.elements.M.col(j)) ')' ...
-                                           ', corresponds to lower bound #' num2str(structure.D1{i}.elements.M.row(j))])]; %#ok
-                if options.bounds.ub(idx,k)
-                    code = [code sprintf([' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k)))])]; %#ok
-                end
-                code = [code sprintf([', component (' num2str(idx) ') */' '\n'])]; %#ok
-            % "Off-Diagonal" part of D1
-            elseif indices.lb.j(i,structure.D1{i}.elements.M.col(j)) == indices.ub.j(i,structure.D1{i}.elements.M.row(j)-dims.lb(k)) % Sanity check, should always be true
-                idx = indices.lb.j(i,structure.D1{i}.elements.M.col(j));
-                if sum(options.bounds.lb(1:idx,k)) ~= structure.D1{i}.elements.M.col(j) || sum(options.bounds.ub(1:idx,k)) ~= structure.D1{i}.elements.M.row(j)-dims.lb(k)
-                    throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
-                end
-                code = [code sprintf([indent names.D1 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']; ' ...
-                                      '/* Element #' num2str(j) ' of ' names.D1 ' (' num2str(structure.D1{i}.elements.M.row(j)) ',' num2str(structure.D1{i}.elements.M.col(j)) ')' ...
-                                      ', corresponds to lower bound #' num2str(sum(options.bounds.lb(1:idx,k))) ' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k))) ' */' '\n'])]; %#ok
-            else
-                throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
             end
         end
         % Iterate over non-zero elements of D2
-        if structure.D2{i}.elements.M.num > 0
+        if isfield(structure.D2{i}, 'elements') && structure.D2{i}.elements.M.num > 0
             code = [code, sprintf([indent '/* Construct ' names.D2 ' */' '\n'])]; %#ok
-        end
-        for j=1:structure.D2{i}.elements.M.num
-            % "Diagonal" part of D2
-            if structure.D2{i}.elements.M.row(j) > dims.lb(k)
-                % Sanity check
-                if ~options.bounds.ub(indices.ub.j(i,structure.D2{i}.elements.M.row(j)-dims.lb(k)),k)
+            for j=1:structure.D2{i}.elements.M.num
+                % "Diagonal" part of D2
+                if structure.D2{i}.elements.M.row(j) > dims.lb(k)
+                    % Sanity check
+                    if ~options.bounds.ub(indices.ub.j(i,structure.D2{i}.elements.M.row(j)-dims.lb(k)),k)
+                        throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
+                    end
+                    idx = indices.ub.j(i,structure.D2{i}.elements.M.row(j)-dims.lb(k)); % Index of component of u corresponding to (row(j)-dims.lb)-th upper bound
+                    code = [code sprintf([indent names.D2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']'])]; %#ok
+                    % If the row(j)-th lower bound has a corresponding upper bound
+                    if options.bounds.lb(idx,k)
+                        code = [code sprintf(['*(1.0 + ' localNames.s '[' num2str(sum(options.bounds.lb(1:idx,k))-1) '])'])]; %#ok
+                        info.flops.add = info.flops.add + 1*length(indices.bounds.map{i});
+                        info.flops.mul = info.flops.mul + 1*length(indices.bounds.map{i});
+                    end
+                    code = [code sprintf(['; ' '/* Element #' num2str(j) ' of ' names.D2 ' (' num2str(structure.D2{i}.elements.M.row(j)) ',' num2str(structure.D2{i}.elements.M.col(j)) ')' ...
+                                               ', corresponds to upper bound #' num2str(structure.D2{i}.elements.M.row(j)-dims.lb(k))])]; %#ok
+                    if options.bounds.lb(idx,k)
+                        code = [code sprintf([' and lower bound #' num2str(sum(options.bounds.lb(1:idx,k)))])]; %#ok
+                    end
+                    code = [code sprintf([', component (' num2str(idx) ') */' '\n'])]; %#ok
+                % "Off-Diagonal" part of D2
+                elseif indices.lb.j(i,structure.D2{i}.elements.M.row(j)) == indices.ub.j(i,structure.D1{i}.elements.M.col(j)) % Sanity check, should always be true
+                    idx = indices.ub.j(i,structure.D2{i}.elements.M.col(j));
+                    if sum(options.bounds.lb(1:idx,k)) ~= structure.D2{i}.elements.M.row(j) || sum(options.bounds.ub(1:idx,k)) ~= structure.D2{i}.elements.M.col(j)
+                        throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
+                    end
+                    code = [code sprintf([indent names.D2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']; ' ...
+                                          '/* Element #' num2str(j) ' of ' names.D2 ' (' num2str(structure.D2{i}.elements.M.row(j)) ',' num2str(structure.D2{i}.elements.M.col(j)) ')' ...
+                                          ', corresponds to lower bound #' num2str(sum(options.bounds.lb(1:idx,k))) ' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k))) ' */' '\n'])]; %#ok
+                else
                     throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
                 end
-                idx = indices.ub.j(i,structure.D2{i}.elements.M.row(j)-dims.lb(k)); % Index of component of u corresponding to (row(j)-dims.lb)-th upper bound
-                code = [code sprintf([indent names.D2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.ub(1:idx,k) | options.bounds.lb(1:idx,k))-1) ']'])]; %#ok
-                % If the row(j)-th lower bound has a corresponding upper bound
-                if options.bounds.lb(idx,k)
-                    code = [code sprintf(['*(1.0 + ' localNames.s '[' num2str(sum(options.bounds.lb(1:idx,k))-1) '])'])]; %#ok
-                    info.flops.add = info.flops.add + 1*length(indices.bounds.map{i});
-                    info.flops.mul = info.flops.mul + 1*length(indices.bounds.map{i});
-                end
-                code = [code sprintf(['; ' '/* Element #' num2str(j) ' of ' names.D2 ' (' num2str(structure.D2{i}.elements.M.row(j)) ',' num2str(structure.D2{i}.elements.M.col(j)) ')' ...
-                                           ', corresponds to upper bound #' num2str(structure.D2{i}.elements.M.row(j)-dims.lb(k))])]; %#ok
-                if options.bounds.lb(idx,k)
-                    code = [code sprintf([' and lower bound #' num2str(sum(options.bounds.lb(1:idx,k)))])]; %#ok
-                end
-                code = [code sprintf([', component (' num2str(idx) ') */' '\n'])]; %#ok
-            % "Off-Diagonal" part of D2
-            elseif indices.lb.j(i,structure.D2{i}.elements.M.row(j)) == indices.ub.j(i,structure.D1{i}.elements.M.col(j)) % Sanity check, should always be true
-                idx = indices.ub.j(i,structure.D2{i}.elements.M.col(j));
-                if sum(options.bounds.lb(1:idx,k)) ~= structure.D2{i}.elements.M.row(j) || sum(options.bounds.ub(1:idx,k)) ~= structure.D2{i}.elements.M.col(j)
-                    throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
-                end
-                code = [code sprintf([indent names.D2 '[' num2str(j-1) '] = ' localNames.tmp '[' num2str(sum(options.bounds.lb(1:idx,k) | options.bounds.ub(1:idx,k))-1) ']; ' ...
-                                      '/* Element #' num2str(j) ' of ' names.D2 ' (' num2str(structure.D2{i}.elements.M.row(j)) ',' num2str(structure.D2{i}.elements.M.col(j)) ')' ...
-                                      ', corresponds to lower bound #' num2str(sum(options.bounds.lb(1:idx,k))) ' and upper bound #' num2str(sum(options.bounds.ub(1:idx,k))) ' */' '\n'])]; %#ok
-            else
-                throw(MException('falcopt:generateConstraintInv:ImplementationError', 'Something went wrong. This is a bug, please report to the project owner.'));
             end
         end
     end
