@@ -658,25 +658,6 @@ else
     end
 end
 
-
-%     else % case external .c functions
-%         % build o.nc (constraints structure)
-%         box = o.box_constraints;
-%         o.nc = repmat(o.nn,1,o.N);
-%         if( o.terminal || o.contractive)
-%             o.nc = [o.nc 1];
-%         else
-%             o.nc = [o.nc 0];
-%         end
-%         ind = 1;
-%
-%         for( i=1:o.nu:length(box)) % not tested ToDo Tommaso
-%             nu = sum(~isinf(box(i:i+o.nu-1,:)));
-%             o.nc(ind) = o.nc(ind)+nu(1)+nu(2);
-%             ind = ind+1;
-%         end
-%     end
-
 % check patterns of stage constraints
 o.K_nc = detect_structure_constraints( o.nc,o );
 
@@ -773,20 +754,6 @@ if (o.contractive || o.terminal)
     end
     optCode = [optCode, sprintf([o.indent.generic  'det_J_and_dot_J(x0, u, x' c_w_use c_tr_use ', &J, dot_J' c_psi_use c_psi_dot_use ');' '\n\n'])];
 end
-
-%     for jj=1:length(o.K_nc)
-%         [d, c, in] = falcopt.generateMVMult({eye(o.nc(1)), 0.5*eye(o.nc(1))}, ...
-%         'names', struct('fun', ['half_sum_nc_' num2str(jj) ], 'M', {{'I', 'hI'}},...
-%         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', real, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-%
-%         if ~isempty(d)
-%             data = [data, d, sprintf('\n')];
-%         end
-%         code = [code, c, sprintf('\n\n')];
-%         in.flops = falcopt.internal.multFlops( in.flops, length(o.K_nc{jj}));
-%         info.flops.once = falcopt.internal.addFlops( info.flops.once, in.flops); % in initialize_slack
-%         info.flops.ls = falcopt.internal.addFlops( info.flops.ls, in.flops); % in build_gpsl
-%     end
 
 [c, d, in] = generate_slack_initialization(o);
 
