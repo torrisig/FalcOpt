@@ -3108,7 +3108,7 @@ end
 if (o.contractive || o.terminal)
         ter_struct = repmat({ones(nu,1)},1,o.N); 
 else
-        ter_struct = repmat([],1,o.N);
+        ter_struct = repmat({[]},1,o.N);
 end
 
 [c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.box_lowerBound), 'ub', ~isinf(o.box_upperBound)),  'types', o.real,'precision', o.precision, ...
