@@ -766,7 +766,7 @@ function [code, info] = generateConstraintInv(varargin)
         % Compute initial value of rk
         if dims.nt(k) > 0
             code = [code, sprintf([options.indent.code options.indent.generic '/* Initialize vectors ' names.r '_k^{a,b} and ' names.c '_k^{a,b} */' '\n'])]; %#ok
-        else
+        elseif dims.bd(k) > 0
             code = [code, sprintf([options.indent.code options.indent.generic '/* Initialize vector ' names.r '_k^{a,b} */' '\n'])]; %#ok
         end
         if ~isempty(structure.D1{indices.bounds.i(k)}) && ~isempty(structure.D2{indices.bounds.i(k)})
@@ -826,7 +826,7 @@ function [code, info] = generateConstraintInv(varargin)
         end
         
         % Compute auxiliary vectors r1, r2 and c1, c2
-        if dims.np(k) > 0
+        if dims.np(k) > 0 && dims.bd(k) > 0
             if dims.nt(k) > 0
                 code = [code, sprintf([options.indent.code options.indent.generic '/* Compute auxiliary vectors ' names.r1 ', ' names.r2 ' and ' names.c1 ', ' names.c2 ' */' '\n'])]; %#ok
             else
@@ -898,7 +898,11 @@ function [code, info] = generateConstraintInv(varargin)
         
         % Finalize rk
         if dims.np(k) > 0
-            code = [code, sprintf([options.indent.code options.indent.generic '/* Complete computation of ' names.r '_k^{a,b,c} */' '\n'])]; %#ok
+            if dims.bd(k) > 0
+                code = [code, sprintf([options.indent.code options.indent.generic '/* Complete computation of ' names.r '_k^{a,b,c} */' '\n'])]; %#ok
+            else
+                code = [code, sprintf([options.indent.code options.indent.generic '/* Compute of ' names.r '_k^c */' '\n'])]; %#ok
+            end
             % Update rk^{a,b} using r2
             if ~isempty(structure.m1{indices.lbAndDp.i(k)}) && ~isempty(structure.m2{indices.ubAndDp.i(k)})
                 if dims.lb(k) == 0 || dims.ub(k) == 0 % Sanity check
@@ -958,14 +962,20 @@ function [code, info] = generateConstraintInv(varargin)
                                        names.m2 ') /* Update ' names.r '_k^{a,b} using ' names.r '_k^c */;' '\n'])]; %#ok
             end
             % Finalize rk^c
-            code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(dims.np(k)) '; i++) { ' ...
-                                   names.r '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+' num2str(dims.lb(k)+dims.ub(k)) '+i] -= ' names.r2 '[i]; }' ... 
-                                   ' /* Finalize ' names.r '_k^c by subtracting ' names.r2 ' */' '\n'])]; %#ok
+            if dims.bd(k) > 0
+                code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(dims.np(k)) '; i++) { ' ...
+                                       names.r '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+' num2str(dims.lb(k)+dims.ub(k)) '+i] -= ' names.r2 '[i]; }' ... 
+                                       ' /* Finalize ' names.r '_k^c by subtracting ' names.r2 ' */' '\n'])]; %#ok
+            end
         end
         
         % Finalize ck
         if dims.np(k) > 0 && dims.nt(k) > 0
-            code = [code, sprintf([options.indent.code options.indent.generic '/* Complete computation of ' names.c '_k^{a,b,c} */' '\n'])]; %#ok
+            if dims.bd(k) > 0
+                code = [code, sprintf([options.indent.code options.indent.generic '/* Complete computation of ' names.c '_k^{a,b,c} */' '\n'])]; %#ok
+            else
+                code = [code, sprintf([options.indent.code options.indent.generic '/* Compute ' names.c '_k^c */' '\n'])]; %#ok
+            end
             % Update ck^{a,b} using c2
             if ~isempty(structure.m1{indices.lbAndDp.i(k)}) && ~isempty(structure.m2{indices.ubAndDp.i(k)})
                 if dims.lb(k) == 0 || dims.ub(k) == 0 % Sanity check
@@ -1030,9 +1040,11 @@ function [code, info] = generateConstraintInv(varargin)
                                        names.m2 ') /* Update ' names.c '_k^{a,b} using ' names.c '_k^c */;' '\n'])]; %#ok
             end
             % Finalize ck^c
-            code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(dims.np(k)) '; i++) { ' ...
-                                   names.c '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+' num2str(dims.lb(k)+dims.ub(k)) '+i] -= ' names.c2 '[i]; }' ... 
-                                   ' /* Finalize ' names.c '_k^c by subtracting ' names.c2 ' */' '\n'])]; %#ok
+            if options.bd(k) > 0
+                code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<' num2str(dims.np(k)) '; i++) { ' ...
+                                       names.c '[' num2str(sum(dims.lb(1:k-1)+dims.ub(1:k-1)+dims.np(1:k-1))) '+' num2str(dims.lb(k)+dims.ub(k)) '+i] -= ' names.c2 '[i]; }' ... 
+                                       ' /* Finalize ' names.c '_k^c by subtracting ' names.c2 ' */' '\n'])]; %#ok
+            end
         end
         
         % Update tau and gamma
