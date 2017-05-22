@@ -1,16 +1,17 @@
 % GENERATECODE Generate the algorithm .c file
 %
-% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R,...);
+% [code, data, optCode, libr, info] = generateCode(dynamics,N,nx,nu,nc,Q,p,R,...);
 % or
-% [code, data, optCode, libr, info] = generateCode(N,nx,nu,nc,Q,p,R,, 'par1', val1, 'par2', val2, ...) [with options]
+% [code, data, optCode, libr, info] = generateCode(dynamics,N,nx,nu,nc,Q,p,R,, 'par1', val1, 'par2', val2, ...) [with options]
 %
 % where required inputs are:
-% N     - Prediction horizon
-% nx    - Number of states
-% nu    - Number of inputs
-% Q     - Weight matrix for states (cost)
-% P     - Weight matrix for terminal states (cost)
-% R     - Weight matrix for inputs (cost)
+% dynamics  - System dynamics
+% N         - Prediction horizon
+% nx        - Number of states
+% nu        - Number of inputs
+% Q         - Weight matrix for states (cost)
+% P         - Weight matrix for terminal states (cost)
+% R         - Weight matrix for inputs (cost)
 %
 % Outputs:
 % - code:  string containing the generated code
@@ -128,7 +129,7 @@ p.addRequired('R', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the inpu
 p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x))); % number of nonlinear constraints (per stage)
 p.addParameter('nw', 0, @(x) (isnumeric(x) && x>=0)); % known disturbance dimension
 p.addParameter('trackReference',false,@islogical);
-p.addParameter('stepSize', 0.3, @(x)(isnumeric(x) && x > 0)); % step size alpha
+p.addParameter('stepSize', [], @(x)(isnumeric(x) && x > 0)); % step size alpha
 p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
 p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
 p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
@@ -162,6 +163,7 @@ p.addParameter('gradients', 'casadi', @(x)(ischar(x)));
 p.addParameter('external_jacobian_x', [], @(x)isa(x,'function_handle'));
 p.addParameter('external_jacobian_u', [], @(x)isa(x,'function_handle'));
 p.addParameter('external_jacobian_n', [], @(x)isa(x,'function_handle'));
+p.addParameter('variable_stepSize',{},@isstruct);
 p.parse(varargin{:});
 o = p.Results;
 
@@ -441,7 +443,8 @@ else
     end
 end
 
-%% check version of toolbox for automatic generation
+
+% check version of toolbox for automatic generation
 switch o.gradients
     case 'casadi'
         import casadi.*
@@ -497,6 +500,100 @@ switch o.precision
         o.real = 'float';
 end
 
+
+% check 'variable_stepSize' parameter
+if isfield(o.variable_stepSize,'active')
+    if ~islogical(o.variable_stepSize.active)
+        error('''variable_stepSize.active'' must be boolean');
+    end
+else
+    if ~isempty(o.stepSize)
+        o.variable_stepSize.active = false;
+    else
+        if isfield( o.variable_stepSize,'alpha_max')
+            o.stepSize = o.variable_stepSize.alpha_max;
+            o.variable_stepSize.active = false;
+        else
+            o.variable_stepSize.active = true;
+        end
+    end
+end
+if o.variable_stepSize.active
+    if isfield(o.variable_stepSize,'steady_state_state')
+        if size(o.variable_stepSize.steady_state_state)~=[o.nx,1]||size(o.variable_stepSize.steady_state_state)~=[1,o.nx]
+            error(sprintf('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx));
+        end
+    else
+        o.variable_stepSize.steady_state_state = zeros(o.nx,1);
+    end
+    if isfield(o.variable_stepSize,'steady_state_input')
+        if size(o.variable_stepSize.steady_state_input)~=[o.nu,1]||size(o.variable_stepSize.steady_state_input)~=[1,o.nu]
+            if size(o.variable_stepSize.steady_state_input)~=[o.nu,o.N]||size(o.variable_stepSize.steady_state_input)~=[o.N,o.nu]
+                error(sprintf('''variable_stepSize.steady_state_input'' must be of size [%i x 1] or [%i x %i]',o.nu,o.nu,o.N));
+            end
+        end
+    else
+        o.variable_stepSize.steady_state_input = zeros(o.N,o.nu);
+    end
+    if isfield(o.variable_stepSize,'decrease_coeff')
+        if ~isnumeric(o.variable_stepSize.decrease_coeff)
+            error('''variable_stepSize.decrease_coeff'' must be numeric');
+        end
+    else
+        o.variable_stepSize.decrease_coeff = 0.75;
+    end
+    if isfield(o.variable_stepSize,'increase_coeff')
+        if ~isnumeric(o.variable_stepSize.increase_coeff)
+            error('''variable_stepSize.increase_coeff'' must be numeric');
+        end
+    else
+        o.variable_stepSize.increase_coeff = 1/o.variable_stepSize.decrease_coeff;
+    end
+    if isfield(o.variable_stepSize,'increase_threshold')
+        if ~isnumeric(o.variable_stepSize.increase_threshold)
+            error('''variable_stepSize.increase_threshold'' must be numeric');
+        end
+    else
+        o.variable_stepSize.increase_threshold = 0.75;
+    end
+    if isfield(o.variable_stepSize,'decrease_threshold')
+        if ~isnumeric(o.variable_stepSize.decrease_threshold)
+            error('''variable_stepSize.decrease_threshold'' must be numeric');
+        end
+    else
+        o.variable_stepSize.decrease_threshold = 0.25;
+    end
+    if isfield(o.variable_stepSize,'alpha_max')
+        if ~isnumeric(o.variable_stepSize.alpha_max)
+            error('''variable_stepSize.alpha_max'' must be numeric');
+        end
+    else
+        if strcmp(o.gradients,'casadi')
+            o.variable_stepSize.alpha_max = get_step_size('quadratic',o.variable_stepSize.steady_state_state,...
+                o.variable_stepSize.steady_state_input,o);
+        else
+            error(sprintf(['the option ''stepSize'' must be specified, or in case of variable stepSize, the option' ...
+                  ' variable_stepSize.alpha_max']));
+        end
+    end
+    if isfield(o.variable_stepSize,'alpha_min')
+        if ~isnumeric(o.variable_stepSize.alpha_min)
+            error('''variable_stepSize.alpha_min'' must be numeric');
+        end
+    else
+        o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
+    end
+else
+    if ~isfield(o,'step_size')
+        if isfield(o.variable_stepSize, 'alpha_max')
+            o.stepSize = o.variable_stepSize.alpha_max;
+        else
+            o.stepSize = 0.4;
+        end
+    end
+end
+
+
 alpha = o.stepSize;
 alpha_eps = alpha*o.eps;
 alpha_eps2 = alpha_eps* o.eps;
@@ -526,6 +623,8 @@ code = [code, sprintf([ o.indent.code o.real ' ' o.min '(' o.real ' x, ' o.real 
     o.indent.code o.indent.generic 'if (x > y) { return y; }' '\n' ...
     o.indent.code o.indent.generic 'else { return x; }' '\n' ...
     o.indent.code '}' '\n\n'])];
+
+
 
 %% CasaDi model_mpc, Jacobian_u and Jacobian_x automatic generation
 switch o.gradients
@@ -755,11 +854,31 @@ else
     optCode = [optCode, sprintf(['\t' 'unsigned int reset_rho = 0;' '\n'])];
 end
 
-optCode = [optCode, sprintf(['\t' o.real ' J= 0.0, alpha = ' falcopt.internal.num2str(alpha, o.precision) ', Jt = 0.0,' '\n'])];
-if o.debug > 1
-    optCode = [optCode, sprintf(['\t\t' 'xp[%d],' '\n'],o.N*o.nx)];
+optCode = [optCode, sprintf(['\t' o.real ' J= 0.0, Jt = 0.0;' '\n'])];
+
+if o.variable_stepSize.active
+    optCode = [optCode, sprintf(['\t' o.real ' rat_1 = ' falcopt.internal.num2str(o.variable_stepSize.decrease_threshold,o.precision) ', '...
+                                'rat_2 = ' falcopt.internal.num2str(o.variable_stepSize.increase_threshold,o.precision) ', '...
+                                'gamma_1 = ' falcopt.internal.num2str(o.variable_stepSize.decrease_coeff,o.precision) ', '...
+                                'gamma_2 = ' falcopt.internal.num2str(o.variable_stepSize.increase_coeff,o.precision) ',\n '...
+                                '\t\talpha_max = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ', '...
+                                'alpha_min = ' falcopt.internal.num2str(o.variable_stepSize.alpha_min,o.precision) ', \n'...
+                                '\t\tared = 0.0, pred = 0.0, rat = 0.0 ;\n\n'])];
+    
+    data = [data, sprintf(['\n/* static data for alpha */ \n '...
+                            'static ' o.real ' alpha = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ';\n'])]; 
+    data = [data, sprintf(['/* static data for inverse of alpha */ \n '...
+                            'static ' o.real ' alpha_inverse = ' falcopt.internal.num2str(1/o.variable_stepSize.alpha_max,o.precision) ';\n'])]; 
+    data = [data, sprintf(['/* static data for minus alpha */ \n '...
+                            'static ' o.real ' minus_alpha = ' falcopt.internal.num2str(-o.variable_stepSize.alpha_max,o.precision) ';\n\n'])];
 else
-    optCode = [optCode, sprintf(['\t\t' 'x[%i], xp[%d],' '\n'],o.N*o.nx,o.N*o.nx)];
+    optCode = [optCode, sprintf(['\t' o.real ' alpha = ' falcopt.internal.num2str(o.stepSize,o.precision) ';\n'])];
+end
+
+if o.debug > 1
+    optCode = [optCode, sprintf(['\t' o.real ' xp[%d],' '\n'],o.N*o.nx)];
+else
+    optCode = [optCode, sprintf(['\t' o.real ' x[%i], xp[%d],' '\n'],o.N*o.nx,o.N*o.nx)];
 end
 optCode = [optCode, sprintf(['\t\t' 'dot_J[%d], du[%d], up[%d],' '\n'],o.N*o.nu,o.N*o.nu,o.N*o.nu)];
 optCode = [optCode, sprintf(['\t\t' 'gps[%d], gpsp[%d],' '\n'],sum(o.nc),sum(o.nc))];
@@ -968,10 +1087,17 @@ end
 
 if o.merit_function == 0
     
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
-        '\t\t\t' 't = 1.0;' '\n',...
-        '\t\t\t' 't_u = 1.0;' '\n',...
-        '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    if o.variable_stepSize.active
+         optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= minus_alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ') {' '\n',...
+            '\t\t\t' 't = 1.0;' '\n',...
+            '\t\t\t' 't_u = 1.0;' '\n',...
+            '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    else
+        optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+            '\t\t\t' 't = 1.0;' '\n',...
+            '\t\t\t' 't_u = 1.0;' '\n',...
+            '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    end
     info.flops.it.comp = info.flops.it.comp +1;
     
     [c,d,in] = generate_weighted_sum_nc(o);
@@ -1048,10 +1174,18 @@ if o.merit_function == 0
 else
     %% recompute rho
     
-    optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
-        '\t\t\t' 't = 1.0;' '\n',...
-        '\t\t\t' 't_u = 1.0;' '\n',...
-        '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    if o.variable_stepSize.active
+        optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= minus_alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ') {' '\n',...
+                '\t\t\t' 't = 1.0;' '\n',...
+                '\t\t\t' 't_u = 1.0;' '\n',...
+                '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    else
+        optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+                '\t\t\t' 't = 1.0;' '\n',...
+                '\t\t\t' 't_u = 1.0;' '\n',...
+                '\t\t\t' 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+    end
+    
     info.flops.it.comp = info.flops.it.comp +1;
     
     [c,d,in] = generate_weighted_sum_nc(o);
@@ -1175,6 +1309,18 @@ else
     info.flops.it.comp = info.flops.it.comp +1;
     
 end
+%% update variable stepSize
+if o.variable_stepSize.active
+    optCode = [optCode, sprintf(['\t\t' 'ared = (phi0 - phit); \n'...
+                '\t\t' 'pred = (-t*phi0_dot);\n'...
+                '\t\t' 'rat = ared/pred ;\n'...
+                '\t\t' 'if( rat < rat_1)\n'...
+                '\t\t\t' 'alpha = ' o.max '( alpha_min, alpha*gamma_1);\n'...
+                '\t\t' 'else\n'...
+                '\t\t\t' 'alpha = ' o.min '( alpha_max, alpha*gamma_2);\n'...
+                '\t\t' 'alpha_inverse = 1/alpha;\n'...
+                '\t\t' 'minus_alpha = -alpha;\n\n'])];
+end
 
 %% the code continues
 
@@ -1212,7 +1358,12 @@ info.flops.it = falcopt.internal.addFlops(info.flops.it, in.flops);
 code = [code, c, sprintf('\n\n')];
 data = [data, d];
 
-optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
+if o.variable_stepSize.active 
+    optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= alpha*alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
+else
+    optCode = [optCode,sprintf(['\t\t' 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
+end
+
 optCode = [optCode,sprintf(['\t\t\t' 'conditions_x = 1;' '\n',...
     '\t\t' 'else' '\n',...
     '\t\t\t' 'conditions_x = 0;' '\n'])];
@@ -1306,7 +1457,6 @@ if o.compile
     disp(compile);
     eval(compile);
 end
-
 
 
 end
@@ -2919,10 +3069,21 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
     struct_mat = diag(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
-    [d, c, in] = falcopt.generateMVMult({1/alpha*eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))), struct_mat_cut}, ...
-        'names', struct('fun', ['build_vNnc_lb_' num2str(jj)], 'M', {{ ['alpha_inv_lb_' num2str(jj)], ['I_lb_' num2str(jj)]}},...
+    
+    if o.variable_stepSize.active
+        M_struct = {eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))),struct_mat_cut};
+        M_names = {{['alpha_inv'], ['I_lb_' num2str(jj)]}};
+        M_static = [false,true];
+    else
+        M_struct = {1/alpha*eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))), struct_mat_cut};
+        M_names = {{ ['alpha_inv_lb_' num2str(jj)], ['I_lb_' num2str(jj)]}};
+        M_static = [true,true];
+    end
+    
+    [d, c, in] = falcopt.generateMVMult(M_struct, ...
+        'names', struct('fun', ['build_vNnc_lb_' num2str(jj)], 'M', M_names,...
         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
-        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'static',M_static,'structure','ordered');
     if ~isempty(d)
         data = [data, d, sprintf('\n')];
     end
@@ -2933,9 +3094,12 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void build_vNnc_lb(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k'),...
-            sprintf(['\n',...
-            '\t\t' 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        code = [code, generateCheck_custom(o.K_lb{jj}, '\t', 'k')];
+        if o.variable_stepSize.active
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)];
+        else
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        end
         code = [code, sprintf(['\t' '}' '\n'])];
     end
     code = [code, sprintf(['}' '\n'])];
@@ -2945,10 +3109,21 @@ end
 for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
     struct_mat = diag(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
-    [d, c, in] = falcopt.generateMVMult({1/alpha*eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut}, ...
-        'names', struct('fun', ['build_vNnc_ub_' num2str(jj)], 'M', {{ ['alpha_inv_ub_' num2str(jj)], ['I_ub_' num2str(jj)]}},...
+    
+    if o.variable_stepSize.active
+        M_struct = {eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
+        M_names = {{ ['alpha_inv'], ['I_ub_' num2str(jj)]}};
+        M_static = [false,true];
+    else
+        M_struct = {1/alpha*eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
+        M_names = {{ ['alpha_inv_ub_' num2str(jj)], ['I_ub_' num2str(jj)]}};
+        M_static = [true,true];
+    end
+    
+    [d, c, in] = falcopt.generateMVMult(M_struct, ...
+        'names', struct('fun', ['build_vNnc_ub_' num2str(jj)], 'M', M_names,...
         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
-        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'static',M_static,'structure','ordered');
     if ~isempty(d)
         data = [data, d, sprintf('\n')];
     end
@@ -2960,9 +3135,12 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void build_vNnc_ub(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_ub)
-        code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k'),...
-            sprintf(['\n',...
-            '\t\t' 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        code = [code, generateCheck_custom(o.K_ub{jj}, '\t', 'k')];
+        if o.variable_stepSize.active
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)];
+        else
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
+        end
         code = [code, sprintf(['\t' '}' '\n'])];
     end
     code = [code, sprintf(['}' '\n'])];
@@ -2982,11 +3160,21 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
     code = [code, c, sprintf('\n\n')];
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
-    [d, c, in] = falcopt.generateMVMult({1/alpha*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})}, ...
-        'names', struct('fun', ['build_vNnc_n_' num2str(jj)], 'M', {{ ['alpha_inv_n_' num2str(jj)], ['temp_n' num2str(jj)]}},...
+    if o.variable_stepSize.active
+        M_struct = {eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
+        M_names = {{ ['alpha_inv'], ['temp_n' num2str(jj)]}};
+        M_static = [false,true];
+    else
+        M_struct = {1/alpha*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
+        M_names = {{ ['alpha_inv_n_' num2str(jj)], ['temp_n' num2str(jj)]}};
+        M_static = [true,true];
+    end
+    
+    [d, c, in] = falcopt.generateMVMult(M_struct, ...
+        'names', struct('fun', ['build_vNnc_n_' num2str(jj)], 'M', M_names,...
         'v', {{'x1', 'x2'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision,...
-        'static', [true,true],...
-        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+        'static', M_static,...
+        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'structure','ordered');
     if ~isempty(d)
         data = [data, d, sprintf('\n')];
     end
@@ -3008,9 +3196,12 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void build_vNnc_n(const ' o.real '* gps, '...
         'const ' o.real '* temp_n, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k'),...
-            sprintf(['\n',...
-            '\t\t' 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0]);' '\n'],jj)]; %#ok
+        code = [code, generateCheck_custom(o.K_n{jj}, '\t', 'k')];
+        if o.variable_stepSize.active
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0], &alpha_inverse);' '\n'],jj)];
+        else
+            code = [code, sprintf(['\n','\t\t' 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0]);' '\n'],jj)]; %#ok
+        end
         code = [code, sprintf(['\t' '}' '\n'])];
     end
     code = [code, sprintf(['}' '\n'])];
@@ -3163,10 +3354,18 @@ if ~isempty(d)
 end
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
-    
-[d, c, in] = falcopt.generateMVMult(-alpha*eye(nu), ...
+
+if o.variable_stepSize.active
+    M_struct = eye(nu);
+    M_static = false;
+else
+    M_struct = -alpha*eye(nu);
+    M_static = true;
+end
+
+[d, c, in] = falcopt.generateMVMult(M_struct, ...
     'names', struct('fun', 'minus_scale_nu', 'M', {{'m_alpha'}},...
-    'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+    'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'static',M_static,'structure','ordered');
 if ~isempty(d)
     data = [data, d, sprintf('\n')];
 end
@@ -3187,10 +3386,18 @@ info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 % info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 for jj=1:length(o.K_nc)
-    [~, c, in] = falcopt.generateMVMult(-alpha*eye(o.nc(o.K_nc{jj}(1))), ...
+    
+    if o.variable_stepSize.active
+        M_struct = eye(o.nc(o.K_nc{jj}(1)));
+        M_static = false;
+    else
+        M_struct = -alpha*eye(o.nc(o.K_nc{jj}(1)));
+        M_static = true;
+    end
+    [~, c, in] = falcopt.generateMVMult(M_struct, ...
         'names', struct('fun', ['minus_scale_nc_' num2str(jj)], 'M', {{'m_alpha'}},...
-        'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'static', true,...
-        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+        'v', {{'x'}}, 'r', 'z'), 'types', o.real, 'precision', o.precision, 'static', M_static,...
+        'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'structure','ordered');
     %     if ~isempty(d)
     %         data = [data, d, sprintf('\n')];
     %     end
@@ -3210,7 +3417,11 @@ if ~isempty(o.K_nc)
         '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj = 1:length(o.K_nc)
         check = generateCheck_custom(o.K_nc{jj}, '\t', 'k' );
-        code = [code, sprintf([check, '\n' '\t\t' 'minus_scale_nc_%i( &res[0], &x[0]);' '\n'], jj)]; %#ok
+        if o.variable_stepSize.active
+            code = [code, sprintf([check, '\n' '\t\t' 'minus_scale_nc_%i( &res[0], &x[0], &minus_alpha);' '\n'], jj)];
+        else
+            code = [code, sprintf([check, '\n' '\t\t' 'minus_scale_nc_%i( &res[0], &x[0]);' '\n'], jj)]; %#ok
+        end
         code = [code, sprintf(['\t' '}' '\n'])]; %#ok
     end
     code = [code, sprintf(['}' '\n'])];
@@ -3307,8 +3518,14 @@ if (o.forceGradient) % This if is to be deleted
     %         code = [code, sprintf(['\t\t' 'product_Dgtop_DJ(Dg_dot_J, &dot_J[ii*%d], Dg);' '\n'],nu)];
     %         code = [code, sprintf(['\t\t' 'scale_sub_nc(&v_Nnc[ii*%d], &gps[ii*%d], Dg_dot_J); ' '\n'],nc,nc)];
     if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+        if o.variable_stepSize.active
+            code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
+                    '\t' 'v_Nnc[%d] = alpha_inverse * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+        else
+            code = [code, sprintf(['\t' 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
+                    '\t' 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+        end
+        
     end
     
     % TODO: incorporate Dn when available
@@ -3357,17 +3574,27 @@ if (o.forceGradient) % This if is to be deleted
             code = [code, sprintf(['\t' 'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
                 '\n'], nu*(ii-1), sum(o.nc) - 1)];
         end
-
-        code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
-            '\n'],(ii-1)*nu)];
-
+        
+        if o.variable_stepSize.active
+            code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0], &minus_alpha);'...
+                '\n'],(ii-1)*nu)];
+        else
+            code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
+                '\n'],(ii-1)*nu)];
+        end
+        
         code = [code, sprintf(['\t' 'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
             '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )];
         code = [code, sprintf(['\t' 'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
             '\n'], ii-1, sum(o.nc(1:ii-1)) )];
     end
     if (o.contractive || o.terminal)
-        code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+         if o.variable_stepSize.active
+             code = [code, sprintf(['\t' 'dsl[%d] = minus_alpha * sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+         else
+             code = [code, sprintf(['\t' 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
+         end
+        
     end
     
     code = [code, sprintf(['}' '\n\n'])];
@@ -3395,12 +3622,22 @@ else % the following has to be deleted
         '\n'],nc)];
     code = [code, sprintf(['\t\t' 'product_matrix_nu(tmp_nu, &dot_J[ii*%d], &muG[ii*%d], Dg);'...
         '\n'],nu,nc)];
-    code = [code, sprintf(['\t\t' 'minus_scale_nu(&du[ii*%d], tmp_nu);'...
-        '\n'],nu)];
+    if o.variable_stepSize.active
+         code = [code, sprintf(['\t\t' 'minus_scale_nu(&du[ii*%d], tmp_nu, &minus_alpha);'...
+            '\n'],nu)];
+    else
+        code = [code, sprintf(['\t\t' 'minus_scale_nu(&du[ii*%d], tmp_nu);'...
+            '\n'],nu)];
+    end
     code = [code, sprintf(['\t\t' 'product_matlab_nc(&sl[ii*%d], &muG[ii*%d], tmp_nc_m);'...
         '\n'],nc,nc)];
-    code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m);'...
-        '\n'],nc)];
+    if o.variable_stepSize.active
+        code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m, &minus_alpha);'...
+            '\n'],nc)];
+    else
+        code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m);'...
+            '\n'],nc)];
+    end
     code = [code, sprintf(['\t' '}' '\n'])];
     code = [code, sprintf(['}' '\n\n'])];
     
@@ -3798,7 +4035,11 @@ code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real 
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
 code = [code, sprintf(['\t' 'unsigned int res = 2;' '\n\n'])];
 
-code = [code, sprintf(['\t' 'if (dot_phi <= ' falcopt.internal.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
+if o.variable_stepSize.active
+    code = [code, sprintf(['\t' 'if (dot_phi <= (-0.50*alpha_inverse)*(du_sqr + dsl_sqr))' '\n'])];
+else
+    code = [code, sprintf(['\t' 'if (dot_phi <= ' falcopt.internal.num2str(-0.50/alpha, o.precision) '*(du_sqr + dsl_sqr))' '\n'])];
+end
 code = [code, sprintf(['\t\t' 'res = 1;' '\n',...
     '\t' 'else' '\n',...
     '\t\t' 'res = 0;' '\n\n',...
@@ -4014,3 +4255,77 @@ code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'm = ' o.
 info.flops.comp = sum(o.nc);
 end
 
+function alpha_opt = get_step_size(cost,x0,u_ref,o)
+
+if size(u_ref) == [o.nu,1]
+    u_ref = repmat(u_ref',o.N,1);
+elseif size(u_ref) == [1,o.nu]
+    u_ref = repmat(u_ref,o.N,1);
+end
+
+if size(x0) == [1,o.nx]
+    x0 = x0';
+end
+
+switch o.gradients
+    case 'casadi'
+        import casadi.*
+        x = SX.sym('x',o.nx);
+        u = SX.sym('u',o.nu);
+        u_n =  SX.sym('u_n',o.N,o.nu);
+        psi = SX.sym('psi',o.N,o.nx);
+        J = SX.sym('J',1);
+        
+        %[~,in_y] = falcopt.casadi2struct( o.dynamics(x,u));
+        dynamics = Function('y_fun',{x,u},{o.dynamics(x,u)});
+        
+    otherwise
+        x = sym('x',[o.nx,1],'real');
+        u = sym('u',[o.nu,1],'real');
+        u_n = sym('u_n',[o.N,o.nu],'real');
+        psi = sym('psi',[o.N,o.nx],'real');
+        J = sym('J',1,'real');
+        
+        dynamics = matlabFunction(o.dynamics(x,u),'Vars',{x,u});
+end
+
+% define psi
+for i=1:o.N
+    if i==1
+        psi(i,:) = dynamics(x,u_n(1,:));
+    else
+        psi(i,:) = dynamics(psi(i-1,:),u_n(i,:));
+    end
+end
+
+% define J
+if ischar(cost)
+    for k = 1:o.N-1
+        J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
+    end
+    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)' + u_n(end,:)*o.R*u_n(end,:)');
+else
+end
+
+switch o.gradients
+    case 'casadi'
+        import casadi.*
+        % compute Hessian
+        HJ = hessian(J,u_n);
+        HJ_fun = Function('HJ_fun',{x,u_n},{HJ});
+
+        alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref))));
+    otherwise
+        if o.nu > 0
+            u_n = reshape(u_n,[],1);
+        end
+        %HJ = hessian(J,u_n);
+        HJ = gradient(J,u_n);
+        HJ = jacobian(HJ,u_n);
+        HJ = subs(HJ,x,x0);
+        HJ = vpa(subs(HJ,u_n,u_ref));
+     
+        alpha_opt = double(1/max(eig(HJ)));
+end
+
+end
