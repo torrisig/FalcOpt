@@ -2,7 +2,6 @@ function generateMotor(par)
 
 % options
 eps = 1e-3;                 % tolerance
-stepSize = 8;               % step size of gradient step (alpha)
 merit_function = 0;         % merit function
 debug = 2;                  % level of debug
 ref = true;                 % to track a desired time-varying reference
@@ -19,7 +18,8 @@ dynamics = @(x,u) model_upd(x,u,par.Ts);
 switch gradients
     case 'casadi' 
         % first option: Automatic differentiation via CasADi to generate derivatives
-        % use of variable step size alpha
+        
+        % use of internally defined and variable step size alpha (default)
         
         variable_stepSize.active = true;
         
@@ -33,9 +33,11 @@ switch gradients
             'name', 'Motor_example_FalcOpt', 'gendir', 'generatedCode');
     case 'matlab'
         % second option: Automatic differentiation via Matlab symbolic toolbox
-        % use of specific step size alpha
         
-        variable_stepSize.active = true;
+        % use of user-defined step size alpha (may perform better but
+        % requires tuning of "variable_stepSize.alpha_max")
+        
+        variable_stepSize.active = false;
         variable_stepSize.alpha_max = 5;
         
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
