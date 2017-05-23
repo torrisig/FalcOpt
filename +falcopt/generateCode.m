@@ -69,7 +69,6 @@
 %                        0: Augmented Lagrangian
 %                        1,2(default) or Inf: l_1, l_2(default) or l_Inf
 %                         non-smooth penalty function
-%   stepSize           - Gradient step size. Default: 0.3
 %   parLs              - Armijo line search step parameter. Default: 0.3
 %   tolLs              - Line search min progress. Default: 1e-4
 %
@@ -128,7 +127,6 @@ p.addRequired('R', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the inpu
 p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x))); % number of nonlinear constraints (per stage)
 p.addParameter('nw', 0, @(x) (isnumeric(x) && x>=0)); % known disturbance dimension
 p.addParameter('trackReference',false,@islogical);
-p.addParameter('stepSize', [], @(x)(isnumeric(x) && x > 0)); % step size alpha
 p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
 p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
 p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
@@ -463,29 +461,23 @@ if isfield(o.variable_stepSize,'active')
         error('''variable_stepSize.active'' must be boolean');
     end
 else
-    if ~isempty(o.stepSize)
-        o.variable_stepSize.active = false;
-    else
-        if isfield( o.variable_stepSize,'alpha_max')
-            o.stepSize = o.variable_stepSize.alpha_max;
-            o.variable_stepSize.active = false;
-        else
-            o.variable_stepSize.active = true;
-        end
+    o.variable_stepSize.active = 'false';
+    if ~isfield(o.variable_stepSize,'alpha_max')
+        o.variable_stepSize.alpha_max = 0.4;
     end
 end
 if o.variable_stepSize.active
     if isfield(o.variable_stepSize,'steady_state_state')
-        if size(o.variable_stepSize.steady_state_state)~=[o.nx,1]||size(o.variable_stepSize.steady_state_state)~=[1,o.nx]
-            error(sprintf('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx));
+        if any(size(o.variable_stepSize.steady_state_state)~=[o.nx,1])||any(size(o.variable_stepSize.steady_state_state)~=[1,o.nx])
+            error('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx);
         end
     else
         o.variable_stepSize.steady_state_state = zeros(o.nx,1);
     end
     if isfield(o.variable_stepSize,'steady_state_input')
-        if size(o.variable_stepSize.steady_state_input)~=[o.nu,1]||size(o.variable_stepSize.steady_state_input)~=[1,o.nu]
-            if size(o.variable_stepSize.steady_state_input)~=[o.nu,o.N]||size(o.variable_stepSize.steady_state_input)~=[o.N,o.nu]
-                error(sprintf('''variable_stepSize.steady_state_input'' must be of size [%i x 1] or [%i x %i]',o.nu,o.nu,o.N));
+        if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,1])||any(size(o.variable_stepSize.steady_state_input)~=[1,o.nu])
+            if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,o.N])||any(size(o.variable_stepSize.steady_state_input)~=[o.N,o.nu])
+                error('''variable_stepSize.steady_state_input'' must be of size [%i x 1] or [%i x %i]',o.nu,o.nu,o.N);
             end
         end
     else
@@ -527,9 +519,13 @@ if o.variable_stepSize.active
         if strcmp(o.gradients,'casadi')
             o.variable_stepSize.alpha_max = get_step_size('quadratic',o.variable_stepSize.steady_state_state,...
                 o.variable_stepSize.steady_state_input,o);
+            if isinf(o.variable_stepSize.alpha_max)
+                error(['the ''variable_stepSize.alpha_max'' cannot be found, for constant step_size ' ...
+                  'set the option variable_stepSize.active = ''false'' and use ''variable_stepSize.alpha_max'' for the value of alpha']);
+            end
         else
-            error(sprintf(['the option ''stepSize'' must be specified, or in case of variable stepSize, the option' ...
-                  ' variable_stepSize.alpha_max']));
+            error(['the option ''variable_stepSize.alpha_max'' must be specified, for constant step_size ' ...
+                  'set the option variable_stepSize.active = ''false'' and use ''variable_stepSize.alpha_max'' for the value of alpha']);
         end
     end
     if isfield(o.variable_stepSize,'alpha_min')
@@ -540,15 +536,13 @@ if o.variable_stepSize.active
         o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
     end
 else
-    if ~isfield(o,'step_size')
-        if isfield(o.variable_stepSize, 'alpha_max')
-            o.stepSize = o.variable_stepSize.alpha_max;
-        else
-            o.stepSize = 0.4;
-        end
+    if isfield(o.variable_stepSize, 'alpha_max')
+        o.stepSize = o.variable_stepSize.alpha_max;
+    else
+        o.stepSize = 0.4;
     end
 end
-
+o.stepSize = o.variable_stepSize.alpha_max;
 
 alpha = o.stepSize;
 alpha_eps = alpha*o.eps;
@@ -2979,7 +2973,7 @@ for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
     
     if o.variable_stepSize.active
         M_struct = {eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))),struct_mat_cut};
-        M_names = {{['alpha_inv'], ['I_lb_' num2str(jj)]}};
+        M_names = {{'alpha_inv', ['I_lb_' num2str(jj)]}};
         M_static = [false,true];
     else
         M_struct = {1/alpha*eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))), struct_mat_cut};
@@ -3001,10 +2995,10 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void build_vNnc_lb(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, generateCheck_custom(o.K_lb{jj}, o.indent.generic , 'k')];
+        code = [code, generateCheck_custom(o.K_lb{jj}, o.indent.generic , 'k')];%#ok
         if o.variable_stepSize.active
             code = [code, sprintf(['\n',...
-                o.indent.generic o.indent.generic 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)];
+                o.indent.generic o.indent.generic 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)];%#ok
         else
             code = [code, sprintf(['\n',...
                 o.indent.generic o.indent.generic 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0]);' '\n'],jj)]; %#ok
@@ -3021,7 +3015,7 @@ for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
     
     if o.variable_stepSize.active
         M_struct = {eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
-        M_names = {{ ['alpha_inv'], ['I_ub_' num2str(jj)]}};
+        M_names = {{ 'alpha_inv', ['I_ub_' num2str(jj)]}};
         M_static = [false,true];
     else
         M_struct = {1/alpha*eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
@@ -3073,7 +3067,7 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
     
     if o.variable_stepSize.active
         M_struct = {eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
-        M_names = {{ ['alpha_inv'], ['temp_n' num2str(jj)]}};
+        M_names = {{ 'alpha_inv', ['temp_n' num2str(jj)]}};
         M_static = [false,true];
     else
         M_struct = {1/alpha*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
@@ -3378,20 +3372,20 @@ end
 if (o.contractive || o.terminal)
     if o.variable_stepSize.active
         code = [code, sprintf([o.indent.generic 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            o.indent.generic 'v_Nnc[%d] = alpha_inverse * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];%#ok
+            o.indent.generic 'v_Nnc[%d] = alpha_inverse * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     else
         code = [code, sprintf([o.indent.generic 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            o.indent.generic 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];%#ok
+            o.indent.generic 'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     end
     
 end
    
 code = [code, sprintf(['\n' o.indent.generic 'solveConstraintSystem(&muG[0], '])];
 if ~isempty(o.K_n)
-    code = [code, sprintf(['&Dn[0], '])];
+    code = [code, sprintf('&Dn[0], ')];
 end
 if (o.contractive || o.terminal)
-    code = [code, sprintf(['&dot_psi_N[0], '])];
+    code = [code, sprintf('&dot_psi_N[0], ')];
 end
 code = [code, sprintf(['&v_Nnc[0], &sl_sqr[0]);' '\n'])];
 
@@ -3445,9 +3439,9 @@ for ii = 1:o.N
 end
 if (o.contractive || o.terminal)
     if o.variable_stepSize.active
-        code = [code, sprintf([o.indent.generic 'dsl[%d] = minus_alpha * sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)]; %#ok
+        code = [code, sprintf([o.indent.generic 'dsl[%d] = minus_alpha * sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
     else
-        code = [code, sprintf([o.indent.generic 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)]; %#ok
+        code = [code, sprintf([o.indent.generic 'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
     end
 end
 code = [code, sprintf(['}' '\n\n'])];   
@@ -4095,45 +4089,53 @@ info.flops.comp = sum(o.nc);
 end
 
 function alpha_opt = get_step_size(cost,x0,u_ref,o)
+% this function works with casaDi tool
 
-if size(u_ref) == [o.nu,1]
+if all(size(u_ref) == [o.nu,1])
     u_ref = repmat(u_ref',o.N,1);
-elseif size(u_ref) == [1,o.nu]
+elseif all(size(u_ref) == [1,o.nu])
     u_ref = repmat(u_ref,o.N,1);
 end
 
-if size(x0) == [1,o.nx]
+if all(size(x0) == [1,o.nx])
     x0 = x0';
 end
 
-switch o.gradients
-    case 'casadi'
-        import casadi.*
-        x = SX.sym('x',o.nx);
-        u = SX.sym('u',o.nu);
-        u_n =  SX.sym('u_n',o.N,o.nu);
-        psi = SX.sym('psi',o.N,o.nx);
-        J = SX.sym('J',1);
-        
-        %[~,in_y] = falcopt.casadi2struct( o.dynamics(x,u));
-        dynamics = Function('y_fun',{x,u},{o.dynamics(x,u)});
-        
-    otherwise
-        x = sym('x',[o.nx,1],'real');
-        u = sym('u',[o.nu,1],'real');
-        u_n = sym('u_n',[o.N,o.nu],'real');
-        psi = sym('psi',[o.N,o.nx],'real');
-        J = sym('J',1,'real');
-        
-        dynamics = matlabFunction(o.dynamics(x,u),'Vars',{x,u});
+if o.nw > 0
+    w_ref = zeros(o.nw,1);
+end
+
+import casadi.*
+x = SX.sym('x',o.nx);
+u = SX.sym('u',o.nu);
+u_n =  SX.sym('u_n',o.N,o.nu);
+psi = SX.sym('psi',o.N,o.nx);
+J = SX.sym('J',1);
+
+% define function
+if o.nw > 0
+    w = SX.sym('u',o.nw);
+    dynamics = Function('y_fun',{x,u,w},{o.dynamics(x,u,w)});
+else
+    dynamics = Function('y_fun',{x,u},{o.dynamics(x,u)});
 end
 
 % define psi
-for i=1:o.N
-    if i==1
-        psi(i,:) = dynamics(x,u_n(1,:));
-    else
-        psi(i,:) = dynamics(psi(i-1,:),u_n(i,:));
+if o.nw > 0
+    for i=1:o.N
+        if i==1
+            psi(i,:) = dynamics(x,u_n(1,:),w);
+        else
+            psi(i,:) = dynamics(psi(i-1,:),u_n(i,:),w);
+        end
+    end
+else
+    for i=1:o.N
+        if i==1
+            psi(i,:) = dynamics(x,u_n(1,:));
+        else
+            psi(i,:) = dynamics(psi(i-1,:),u_n(i,:));
+        end
     end
 end
 
@@ -4146,25 +4148,16 @@ if ischar(cost)
 else
 end
 
-switch o.gradients
-    case 'casadi'
-        import casadi.*
-        % compute Hessian
-        HJ = hessian(J,u_n);
-        HJ_fun = Function('HJ_fun',{x,u_n},{HJ});
+% compute Hessian
+HJ = hessian(J,u_n);
 
-        alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref))));
-    otherwise
-        if o.nu > 0
-            u_n = reshape(u_n,[],1);
-        end
-        %HJ = hessian(J,u_n);
-        HJ = gradient(J,u_n);
-        HJ = jacobian(HJ,u_n);
-        HJ = subs(HJ,x,x0);
-        HJ = vpa(subs(HJ,u_n,u_ref));
-     
-        alpha_opt = double(1/max(eig(HJ)));
+% find alpha max
+if o.nw > 0
+    HJ_fun = Function('HJ_fun',{x,u_n,w},{HJ});
+    alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref,w_ref))));
+else
+    HJ_fun = Function('HJ_fun',{x,u_n},{HJ});
+    alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref))));
 end
-
+    
 end
