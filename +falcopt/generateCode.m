@@ -648,7 +648,7 @@ switch o.gradients
             string = [string, 'void build_umb(const double* u, const unsigned int k, double* r)\n'];
             string = [string,'no check of dimensions, the structure of matrices must be provided in an "ordered" manner: \n'...
                 'Jac_x_struct, Jac_u_struct and Jac_n_struct parameters must be provided \n' ];
-            warning(string);
+            warning(sprintf(string)); %#ok
             
             % add .h file to library
             if( exist(fullfile(path, 'external_functions.h'), 'file'))
