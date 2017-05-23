@@ -4,7 +4,7 @@
 %
 % where required inputs are:
 %
-%  dynamics                              - System dynamics
+%  dynamics                         - System dynamics
 %  N                                     - Prediction horizon
 %  nx                                    - Number of states
 %  nu                                    - Number of inputs
@@ -65,28 +65,33 @@
 %
 % Algorithm parameters
 %
-%   merit_function     - Merit function:
-%                        0: Augmented Lagrangian
-%                        1,2(default) or Inf: l_1, l_2(default) or l_Inf
-%                         non-smooth penalty function
-%   parLs              - Armijo line search step parameter. Default: 0.3
-%   tolLs              - Line search min progress. Default: 1e-4
+%   variable_stepSize             - struct with fields: 
+%                                               active: activates variable step size, via a trust-region procedure
+%                                                   if false is set to constant (alpha_max specified next). Default: true
+%                                               alpha_max: maximum step size. If not specified, it is computed via second order 
+%                                                   information around the assumed equilibrium x = 0, u = 0 (requires CasADi)
+%   merit_function                  - Merit function:
+%                                               0: Augmented Lagrangian
+%                                               1,2(default) or Inf: l_1, l_2(default) or l_Inf
+%                                                   non-smooth penalty function
+%   parLs                              - Armijo line search step parameter. Default: 0.3
+%   tolLs                                - Line search min progress. Default: 1e-4
 %
 % Code generation settings
 %
-%   build_MEX          - Produce MEX file for use in Matlab. Default: true
-%   name               - Name of the .c and .mex file (if any)
-%   gendir             - Path of the .c file folder
-%   compile            - Compile the generated code. Default: true
-%   verbose            - Level of procedural output of this function.
-%                         Default: 0
-%   test               - Level of internal numerical tests performed.
-%                         Default: 0
-%   debug              - Level of debug (number of inputs/outputs of
-%                         generated functions). Default: 1
-%   indent             - Indentation to be used in code generation.
-%                         Default: struct('code', '', 'data', '', 'generic', '\t' )
-%   inline             - Inline keyword to be used. Default: 'inline'
+%   build_MEX                       - Produce MEX file for use in Matlab. Default: true
+%   name                               - Name of the .c and .mex file (if any)
+%   gendir                              - Path of the .c file folder
+%   compile                            - Compile the generated code. Default: true
+%   verbose                            - Level of procedural output of this function.
+%                                                  Default: 0
+%   test                                  - Level of internal numerical tests performed.
+%                                                  Default: 0
+%   debug                              - Level of debug (number of inputs/outputs of
+%                                                  generated functions). Default: 1
+%   indent                              - Indentation to be used in code generation.
+%                                                   Default: struct('code', '', 'data', '', 'generic', '\t' )
+%   inline                                - Inline keyword to be used. Default: 'inline'
 %
 % Outputs:
 %
