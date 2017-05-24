@@ -72,12 +72,14 @@
 %                                                   information around the assumed equilibrium x = 0, u = 0 (requires CasADi)
 %                                       alpha_min: minimum step size. If not specified, is set to 0.1*alpha_max
 %                                       steady_state_state: if specified, alpha_max is computed around this equilibrium
+%                                                   otherwise around x = 0
 %                                       steady_state_input: if specified, alpha_max is computed around this equilibrium
+%                                                   otherwise around u = 0
 %                                       increase_threshold: define upper bound for trust-region. Default value: 0.75
-%                                       increase_coeff: coefficient of increasing step size inside the trust-region.
+%                                       increase_coeff: coefficient >1 by which we increase the trust-region
 %                                                   Default value: 1.33
-%                                       deacrease_threshold: lower bound for the trust-region: Default value: 0.25
-%                                       decreasing_coeff: coefficient for decreasing alpha outside the trust-region
+%                                       decrease_threshold: lower bound for the trust-region: Default value: 0.25
+%                                       decrease_coeff: coefficient >1 by which we decrease the trust-region
 %                                                   Default value: 0.75
 %   merit_function              - Merit function:
 %                                       0: Augmented Lagrangian
@@ -501,12 +503,18 @@ if o.variable_stepSize.active
         if ~isnumeric(o.variable_stepSize.decrease_coeff)
             error('''variable_stepSize.decrease_coeff'' must be numeric');
         end
+        if o.variable_stepSize.decrease_coeff >= 1
+            error('''variable_stepSize.decrease_coeff'' must be smaller than 1');
+        end
     else
         o.variable_stepSize.decrease_coeff = 0.75;
     end
     if isfield(o.variable_stepSize,'increase_coeff')
         if ~isnumeric(o.variable_stepSize.increase_coeff)
             error('''variable_stepSize.increase_coeff'' must be numeric');
+        end
+        if o.variable_stepSize.increase_coeff <= 1
+            error('''variable_stepSize.increase_coeff'' must be larger than 1');
         end
     else
         o.variable_stepSize.increase_coeff = 1/o.variable_stepSize.decrease_coeff;
