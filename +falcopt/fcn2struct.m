@@ -60,7 +60,7 @@ function [data, info] = fcn2struct(varargin)
     if( isa(f,'function_handle'))
         error_s = sprintf(['Parameter "function" must be a sym-matrix (see matlab symbolic toolbox) or numeric matrix.\n'...
             'use (for example) x = sym(''x'',[5,1]); and call fcn2struct(f(x),opt);']);
-        error(error_s);
+        error(error_s); %#ok
     end
     
     % check if sym matrix or numeric matrix. If error assume sym matrix
@@ -92,19 +92,19 @@ function [data, info] = fcn2struct(varargin)
         for j= 1:m
             if( M(i,j) ~= 0)
                 if ( isempty(values))
-                    values = [ values; M(i,j)];
-                    indeces = [indeces, ind];
+                    values = [ values; M(i,j)]; %#ok
+                    indeces = [indeces, ind]; %#ok
                     S(i,j) = ind;
                 elseif( ~any(find(values==M(i,j))) )||(~isequal(p.Results.structure,'unique'))
-                    values = [ values; M(i,j)];
+                    values = [ values; M(i,j)]; %#ok
                     ind = ind +1;
-                    indeces = [indeces, ind];
+                    indeces = [indeces, ind]; %#ok
                     S(i,j) = ind;
                 else
-                    S(i,j) = indeces(find(values==M(i,j)));
+                    S(i,j) = indeces(find(values==M(i,j))); %#ok
                 end
-                rows = [ rows; i];
-                cols = [ cols; j];
+                rows = [ rows; i]; %#ok
+                cols = [ cols; j]; %#ok
             end
         end
     end
@@ -116,14 +116,14 @@ function [data, info] = fcn2struct(varargin)
     info.structure.num = size(values,1);
     info.static = static;
 
-    fun = @replaceEsp; % initialize function called by regexprep (to substitute 'pow')
-    fun_2 = @(x)falcopt.internal.num2str(str2double(x),'precision',o.precision); % initialize function regexprep call to convert numbers
+    fun = @replaceEsp; %#ok % initialize function called by regexprep (to substitute 'pow') 
+    fun_2 = @(x)falcopt.internal.num2str(str2double(x),'precision',o.precision); %#ok % initialize function regexprep call to convert numbers
     
     % substitute 'pow' in subexpression where possible and save  subexpressions to data
     if length(subr)>0
-        data = [data, sprintf(['\t' o.real ' '])];
+        data = [data, sprintf([o.indent.generic o.real ' '])];
         for i = 1:length(subr)-1
-            data = [ data, sprintf('s%i,',i)];
+            data = [ data, sprintf('s%i,',i)]; %#ok
         end
         data = [ data, sprintf('s%i;\n\n',length(subr))];
     end
@@ -138,7 +138,7 @@ function [data, info] = fcn2struct(varargin)
         tmp = regexprep(tmp,'(\d+\.\d+E[\-\+]*\d+|\d+\.\d+\d|\d\.\d)','${fun_2($1)}');
        
         % save into data
-        data = [ data, sprintf(['\ts%i = %s\n'],i,tmp)];
+        data = [ data, sprintf([o.indent.generic 's%i = %s\n'],i,tmp)]; %#ok
     end
     
     % subs. 'pow' in values where possible and save to data
@@ -156,9 +156,9 @@ function [data, info] = fcn2struct(varargin)
         
         if( static)
             tmp = regexprep( tmp,';','');
-            data = [ data sprintf([tmp ', '])];
+            data = [ data sprintf([tmp ', '])]; %#ok
         else
-            data = [data sprintf(['\t' p.Results.name '[%i] = ' tmp '\n'], i-1)];
+            data = [data sprintf([o.indent.generic p.Results.name '[%i] = ' tmp '\n'], i-1)]; %#ok
         end 
     end
     
@@ -173,7 +173,7 @@ function [data, info] = fcn2struct(varargin)
         data = strrep(data, char(u(j)), sprintf('u[%i]',j-1));
     end
     
-    fun_3 = @(x)sprintf('s%i',subr_ind(str2num(x)));
+    fun_3 = @(x)sprintf('s%i',subr_ind(str2num(x))); %#ok
     data = regexprep(data,sprintf([subr_name '(\\d)']),'${fun_3($1)}');
     %ToDo Tommaso
     for j = 50:-1:1
@@ -260,12 +260,12 @@ switch method
                        
                         % updated the indices positions in subr_ind
                         if isempty(k2)||k>subr_ind(k2)
-                            subr_ind(subr_ind(:)>= k ) = subr_ind(subr_ind(:)>= k ) +1 ;
-                            subr_ind(end+1)=k;
+                            subr_ind(subr_ind(:)>= k ) = subr_ind(subr_ind(:)>= k ) +1 ; %#ok
+                            subr_ind(end+1)=k; %#ok
                         else
                             pos = subr_ind(k2)+1;
-                            subr_ind(subr_ind(:)>= pos ) = subr_ind(subr_ind(:)>= pos) +1 ;
-                            subr_ind(end+1)=pos;
+                            subr_ind(subr_ind(:)>= pos ) = subr_ind(subr_ind(:)>= pos) +1 ; %#ok
+                            subr_ind(end+1)=pos; %#ok
                         end
                        
                         break;
@@ -273,9 +273,9 @@ switch method
                 end
                
                 % place sigma at the end
-                subr = [subr,{sigma}];
+                subr = [subr,{sigma}]; %#ok
                 if length(subr_ind) ~= length(subr)||isempty(subr)
-                    subr_ind = [subr_ind,ind];
+                    subr_ind = [subr_ind,ind]; %#ok
                 end
                
                 % update sbexpression name
@@ -287,19 +287,19 @@ switch method
         % order subexpr based on subr_ind
         tmp = subr;
         for k = 1:length(subr)
-            subr{k} = tmp{find(subr_ind==k)};
+            subr{k} = tmp{find(subr_ind==k)}; %#ok
         end
        
     otherwise
         ind = 1;
         string = sprintf([sub_name '1']);
         for i=1:10                  % limit to a max of 10 subexpression
-            [f,subr{ind}] = subexpr(f,string);
+            [f,subr{ind}] = subexpr(f,string); %#ok
             if isempty(subr{ind})
-                subr(ind) = [];
+                subr(ind) = []; %#ok
                 break;
             else
-                subr{ind} = vpa(simplify(subr{ind}));
+                subr{ind} = vpa(simplify(subr{ind})); %#ok
                 ind = ind +1;
                 string = sprintf([sub_name '%i'],ind);
             end
