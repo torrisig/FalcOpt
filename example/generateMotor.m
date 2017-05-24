@@ -1,12 +1,12 @@
 function generateMotor(par)
 
 % options
-eps = 1e-3;                 % tolerance
+eps = 1e-3;                   % tolerance
 merit_function = 0;         % merit function
-debug = 2;                  % level of debug
-ref = true;                 % to track a desired time-varying reference
+debug = 2;                    % level of debug
+ref = true;                     % to track a desired (possibly time-varying) reference
 contractive = false;        % no constractive constraints
-terminal = false;           % no terminal constraints
+terminal = false;             % no terminal constraints
 gradients = 'casadi';
 real = 'double';
 
