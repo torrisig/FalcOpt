@@ -4,98 +4,107 @@
 %
 % where required inputs are:
 %
-%  dynamics                         - System dynamics
-%  N                                     - Prediction horizon
-%  nx                                    - Number of states
-%  nu                                    - Number of inputs
-%  Q                                     - Weight matrix for states (cost)
-%  P                                     - Weight matrix for terminal states (cost)
-%  R                                     - Weight matrix for inputs (cost)
+%  dynamics                     - System dynamics
+%  N                            - Prediction horizon
+%  nx                           - Number of states
+%  nu                           - Number of inputs
+%  Q                            - Weight matrix for states (cost)
+%  P                            - Weight matrix for terminal states (cost)
+%  R                            - Weight matrix for inputs (cost)
 %
 % The following options are available:
 %
 % Problem definition options
 %
-%   nw                                  - Known disturbance dimension
-%   trackReference                - A boolean. Track a desired time-varying reference. Default: false
+%   nw                          - Known disturbance dimension
+%   trackReference              - A boolean. Track a desired time-varying reference. Default: false
 %   box_lowerBound              - Lower bound constraint for the inputs: either a nu*1 or nu*N matrix
 %                                               (stage-wise variable constraints)
-%   box_upperBound             - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
+%   box_upperBound              - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
 %                                               (stage-wise variable constraints)
-%   constraints_handle           - A function handle for provided nonlinear constraint function
+%   constraints_handle          - A function handle for provided nonlinear constraint function
 %                                               or a 1*N cell of function handles
-%   nn                                  - number of nonlinear constraints
+%   nn                          - number of nonlinear constraints
 %                                               or a cell 1*N (stage-wise variable constraints)
-%   contractive                      - A boolean. Default: 'false'
-%   terminal                           - A boolean. Default: 'false'
-%   precision                         - 'double'(default) or 'single'
+%   contractive                 - A boolean. Default: 'false'
+%   terminal                    - A boolean. Default: 'false'
+%   precision                   - 'double'(default) or 'single'
 %
 % Computation of Jacobians
 %
-%   gradients                         - Different way of automatic function differentiation/generation
+%   gradients                   - Different way of automatic function differentiation/generation
 %                                               Can be: 'casadi', 'matlab', 'manual' or 'ccode'. Default: 'casadi'
-%   Jac_x_static                    - Boolean, false(default): Jacobian_x is dynamic
+%   Jac_x_static                - Boolean, false(default): Jacobian_x is dynamic
 %                                               (i.e., it depends on x and/or u)
-%   Jac_u_static                    - Boolean, false(default): Jacobian_u is dynamic
+%   Jac_u_static                - Boolean, false(default): Jacobian_u is dynamic
 %                                               (i.e., it depends on x and/or u)
-%   external_jacobian_x          - Function handle to provide jacobian_x
+%   external_jacobian_x         - Function handle to provide jacobian_x
 %                                               (only with options gradients = 'manual')
-%   external_jacobian_u          - Function handle to provide jacobian_u
+%   external_jacobian_u         - Function handle to provide jacobian_u
 %                                               (only with options gradients = 'manual')
-%   external_jacobian_n          - Function handle to provide jacobian_n
+%   external_jacobian_n         - Function handle to provide jacobian_n
 %                                               (only with options gradients = 'manual')
-%   Jac_x_struct                     - Matrix containing the structure of the derivative
+%   Jac_x_struct                - Matrix containing the structure of the derivative
 %                                               of 'dynamics' wrt to x (only for 'gradients' =
 %                                               'ccode')
-%   Jac_u_struct                     - Matrix containing the structure of the derivative
+%   Jac_u_struct                - Matrix containing the structure of the derivative
 %                                               of 'dynamics' wrt to u (only for 'gradients' =
 %                                               'ccode')
-%   Jac_n_struct                    - Matrix containing the structure of the derivative
+%   Jac_n_struct                - Matrix containing the structure of the derivative
 %                                               of 'constraints_handle' wrt to u (only for
 %                                               'gradients' = 'ccode')
-%   K_n                                 - Cell containing the vectors of the different stages
+%   K_n                         - Cell containing the vectors of the different stages
 %                                               on which the nonlinear constraints apply (only for
 %                                               'gradients' = 'ccode')
 %
 % Tolerance and max iteration settings
 %
-%   eps                                 - Tolerance on KKT optimality. Default: 1e-3
-%   maxIt                              - Max number of iterations. Default: 4000
-%   maxItLs                           - Max number of line search iterations. Default: 10
+%   eps                         - Tolerance on KKT optimality. Default: 1e-3
+%   maxIt                       - Max number of iterations. Default: 4000
+%   maxItLs                     - Max number of line search iterations. Default: 10
 %
 % Algorithm parameters
 %
-%   variable_stepSize             - struct with fields: 
-%                                               active: activates variable step size, via a trust-region procedure
+%   variable_stepSize           - struct with fields: 
+%                                       active: activates variable step size, via a trust-region procedure
 %                                                   if false is set to constant (alpha_max specified next). Default: true
-%                                               alpha_max: maximum step size. If not specified, it is computed via second order 
+%                                       alpha_max: maximum step size. If not specified, it is computed via second order 
 %                                                   information around the assumed equilibrium x = 0, u = 0 (requires CasADi)
-%   merit_function                  - Merit function:
-%                                               0: Augmented Lagrangian
-%                                               1,2(default) or Inf: l_1, l_2(default) or l_Inf
+%                                       alpha_min: minimum step size. If not specified, is set to 0.1*alpha_max
+%                                       steady_state_state: if specified, alpha_max is computed around this equilibrium
+%                                       steady_state_input: if specified, alpha_max is computed around this equilibrium
+%                                       increase_threshold: define upper bound for trust-region. Default value: 0.75
+%                                       increase_coeff: coefficient of increasing step size inside the trust-region.
+%                                                   Default value: 1.33
+%                                       deacrease_threshold: lower bound for the trust-region: Default value: 0.25
+%                                       decreasing_coeff: coefficient for decreasing alpha outside the trust-region
+%                                                   Default value: 0.75
+%   merit_function              - Merit function:
+%                                       0: Augmented Lagrangian
+%                                       1,2(default) or Inf: l_1, l_2(default) or l_Inf
 %                                                   non-smooth penalty function
-%   parLs                              - Armijo line search step parameter. Default: 0.3
-%   tolLs                                - Line search min progress. Default: 1e-4
+%   parLs                       - Armijo line search step parameter. Default: 0.3
+%   tolLs                       - Line search min progress. Default: 1e-4
 %
 % Code generation settings
 %
-%   build_MEX                       - Produce MEX file for use in Matlab. Default: true
-%   name                               - Name of the .c and .mex file (if any)
-%   gendir                              - Path of the .c file folder
-%   compile                            - Compile the generated code. Default: true
-%   verbose                            - Level of procedural output of this function.
+%   build_MEX                   - Produce MEX file for use in Matlab. Default: true
+%   name                        - Name of the .c and .mex file (if any)
+%   gendir                      - Path of the .c file folder
+%   compile                     - Compile the generated code. Default: true
+%   verbose                     - Level of procedural output of this function.
 %                                                  Default: 0
-%   test                                  - Level of internal numerical tests performed.
+%   test                        - Level of internal numerical tests performed.
 %                                                  Default: 0
-%   debug                              - Level of debug (number of inputs/outputs of
+%   debug                       - Level of debug (number of inputs/outputs of
 %                                                  generated functions). Default: 1
-%   indent                              - Indentation to be used in code generation.
+%   indent                      - Indentation to be used in code generation.
 %                                                   Default: struct('code', '', 'data', '', 'generic', '\t' )
-%   inline                                - Inline keyword to be used. Default: 'inline'
+%   inline                      - Inline keyword to be used. Default: 'inline'
 %
 % Outputs:
 %
-%   info:                                 - a struct containing the number of FLOPS
+%   info:                       - a struct containing the number of FLOPS
 %
 %
 % Copyright (c) 2017 Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
@@ -473,14 +482,14 @@ else
 end
 if o.variable_stepSize.active
     if isfield(o.variable_stepSize,'steady_state_state')
-        if any(size(o.variable_stepSize.steady_state_state)~=[o.nx,1])||any(size(o.variable_stepSize.steady_state_state)~=[1,o.nx])
+        if any(size(o.variable_stepSize.steady_state_state)~=[o.nx,1])&& any(size(o.variable_stepSize.steady_state_state)~=[1,o.nx])
             error('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx);
         end
     else
         o.variable_stepSize.steady_state_state = zeros(o.nx,1);
     end
     if isfield(o.variable_stepSize,'steady_state_input')
-        if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,1])||any(size(o.variable_stepSize.steady_state_input)~=[1,o.nu])
+        if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,1])&& any(size(o.variable_stepSize.steady_state_input)~=[1,o.nu])
             if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,o.N])||any(size(o.variable_stepSize.steady_state_input)~=[o.N,o.nu])
                 error('''variable_stepSize.steady_state_input'' must be of size [%i x 1] or [%i x %i]',o.nu,o.nu,o.N);
             end
@@ -806,7 +815,7 @@ if o.variable_stepSize.active
     data = [data, sprintf(['/* static data for minus alpha */ \n '...
                             'static ' o.real ' minus_alpha = ' falcopt.internal.num2str(-o.variable_stepSize.alpha_max,o.precision) ';\n\n'])];
 else
-    optCode = [optCode, sprintf(['\t' o.real ' alpha = ' falcopt.internal.num2str(o.stepSize,o.precision) ';\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.real ' alpha = ' falcopt.internal.num2str(o.stepSize,o.precision) ';\n'])];
 end
 
 if o.debug > 1
@@ -1140,7 +1149,7 @@ else
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
     else
-        optCode = [optCode, sprintf(['\t\t' 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
@@ -1294,17 +1303,19 @@ else
     info.flops.it.comp = info.flops.it.comp +1;
     
 end
-%% update variable stepSize
+
+% update variable stepSize
 if o.variable_stepSize.active
-    optCode = [optCode, sprintf(['\t\t' 'ared = (phi0 - phit); \n'...
-                '\t\t' 'pred = (-t*phi0_dot);\n'...
-                '\t\t' 'rat = ared/pred ;\n'...
-                '\t\t' 'if( rat < rat_1)\n'...
-                '\t\t\t' 'alpha = ' o.max '( alpha_min, alpha*gamma_1);\n'...
-                '\t\t' 'else\n'...
-                '\t\t\t' 'alpha = ' o.min '( alpha_max, alpha*gamma_2);\n'...
-                '\t\t' 'alpha_inverse = 1/alpha;\n'...
-                '\t\t' 'minus_alpha = -alpha;\n\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic '/* update step size via trust-region procedure */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'ared = (phi0 - phit); \n'...
+                o.indent.generic o.indent.generic 'pred = (-t*phi0_dot);\n'...
+                o.indent.generic o.indent.generic 'rat = ared/pred ;\n'...
+                o.indent.generic o.indent.generic 'if( rat < rat_1)\n'...
+                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.max '( alpha_min, alpha*gamma_1);\n'...
+                o.indent.generic o.indent.generic 'else\n'...
+                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.min '( alpha_max, alpha*gamma_2);\n'...
+                o.indent.generic o.indent.generic 'alpha_inverse = 1/alpha;\n'...
+                o.indent.generic o.indent.generic 'minus_alpha = -alpha;\n\n'])];
 end
 
 %% the code continues
@@ -3450,78 +3461,6 @@ if (o.contractive || o.terminal)
     end
 end
 code = [code, sprintf(['}' '\n\n'])];   
-    
-% <<<<<<< HEAD
-%     code = [code, sprintf(['\t\t' 'product_nc_nc(&muG[ii*%d], tmp_nc, M);'...
-%         '\n'],nc)];
-%     code = [code, sprintf(['\t\t' 'product_matrix_nu(tmp_nu, &dot_J[ii*%d], &muG[ii*%d], Dg);'...
-%         '\n'],nu,nc)];
-%    
-%     
-%     if o.variable_stepSize.active
-%         code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m, &minus_alpha);'...
-%             '\n'],nc)];
-%     else
-%         code = [code, sprintf(['\t\t' 'minus_scale_nu(&dsl[ii*%d], tmp_nc_m);'...
-%             '\n'],nc)];
-%     end
-%     code = [code, sprintf(['\t' '}' '\n'])];
-%     code = [code, sprintf(['}' '\n\n'])];
-% =======
-%     code = [code, sprintf([o.indent.generic  'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
-%         '\n'],(ii-1)*nu)]; %#ok
-% >>>>>>> 1384b9a339b1dedd8605ac898660edbc21425a7e
-%     
-%     code = [code, sprintf([o.indent.generic  'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
-%         '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )]; %#ok
-%     code = [code, sprintf([o.indent.generic  'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
-%         '\n'], ii-1, sum(o.nc(1:ii-1)) )]; %#ok
-% end
-% 
-% <<<<<<< HEAD
-%         if (o.contractive || o.terminal)
-%             code = [code, sprintf(['\t' 'sum_terminal(&tmp_nu[0], &dot_psi_N[%i], &muG[%i]);'...
-%                 '\n'], nu*(ii-1), sum(o.nc) - 1)];
-%         end
-%         
-%         if o.variable_stepSize.active
-%             code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0], &minus_alpha);'...
-%                 '\n'],(ii-1)*nu)];
-%         else
-%             code = [code, sprintf(['\t' 'minus_scale_nu(&du[%i], &tmp_nu[0]);'...
-%                 '\n'],(ii-1)*nu)];
-%         end
-%         
-%         code = [code, sprintf(['\t' 'product_matlab_nc(&sl[%d], &muG[%d], %i, &tmp_nc_m[0]);'...
-%             '\n'],sum(o.nc(1:ii-1)), sum(o.nc(1:ii-1)), ii-1 )];
-%         code = [code, sprintf(['\t' 'minus_scale_nc(&tmp_nc_m[0], %i, &dsl[%d]);'...
-%             '\n'], ii-1, sum(o.nc(1:ii-1)) )];
-%     end
-%     
-%         
-% =======
-% if (o.contractive || o.terminal)
-%     code = [code, sprintf([o.indent.generic  'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-%         o.indent.generic  'v_Nnc[%d] = ' falcopt.internal.num2str(1/alpha, o.precision) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
-% end
-% 
-% code = [code, sprintf(['\n' o.indent.generic  'solveConstraintSystem(&muG[0], '])];
-% if ~isempty(o.K_n)
-%     code = [code, sprintf('&Dn[0], ')];
-% end
-% if (o.contractive || o.terminal)
-%     code = [code, sprintf('&dot_psi_N[0], ')];
-% end
-% code = [code, sprintf(['&v_Nnc[0], &sl_sqr[0]);' '\n'])];
-% 
-% 
-% if (o.contractive || o.terminal)
-%     code = [code, sprintf([o.indent.generic  'dsl[%d] = ' falcopt.internal.num2str(-alpha, o.precision) '* sl[%d] * muG[%d];' '\n'], sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1)];
-% end
-% 
-% code = [code, sprintf(['}' '\n\n'])];
-
-% multiply the for N the flops ( inside for-cycle)
 info.flops = falcopt.internal.multFlops( info.flops, N);
 
 end
