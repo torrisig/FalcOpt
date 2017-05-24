@@ -22,7 +22,9 @@ switch gradients
         % use of internally defined and variable step size alpha (default)
         
         variable_stepSize.active = true;
-        
+        variable_stepSize.steady_state_state = par.xref;
+        variable_stepSize.steady_state_input = par.uref;
+      
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
             'variable_stepSize',variable_stepSize,...
             'constraints_handle', par.constraint,'nn',par.nn, 'gradients', gradients,...
