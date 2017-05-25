@@ -132,19 +132,28 @@ if plot_figures
     figure()
     hold on
     plot(time(1,1:size(state,2)),state(1,:),'b');
-    title('flux x_1')
+    title('Rotor flux x_{1}')
+    ylabel('x_{1} [Wb]');
+    xlabel('time [s]');
 
     
     figure
     hold on
     plot(time(1,1:size(state,2)),state(2,:),'b');
-    plot(time,problem.xref(2)*ones(size(time)),'b:');
-    title('speed x_2')
+    plot(time,problem.xref(2)*ones(size(time)),'r-.');
+    title('Absolute rotor speed x_{2}')
+    ylabel('x_{2} [rad/s]');
+    xlabel('time [s]');
+    axis([0 6 -10 100]);
+    legend('x_2','reference');
 
     figure()
     hold on
     plot(time(1,1:size(input,2)),input(1,:),'g');
     plot(time(1,1:size(input,2)),input(2,:),'b');
-    title('Input')
+    title('Inputs')
+    ylabel('u_1, u_2 [A]');
+    xlabel('time [s]');
+    legend('u_1','u_2');
 end
 
