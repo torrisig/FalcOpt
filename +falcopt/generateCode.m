@@ -561,7 +561,7 @@ else
     if isfield(o.variable_stepSize, 'alpha_max')
         o.stepSize = o.variable_stepSize.alpha_max;
     else
-        o.stepSize = 0.4;
+        o.variable_stepSize.alpha_max = 0.4;
     end
 end
 o.stepSize = o.variable_stepSize.alpha_max;
