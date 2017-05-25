@@ -1,12 +1,12 @@
 function generateMotor(par)
 
 % options
-eps = 1e-3;                 % tolerance
+eps = 1e-3;                   % tolerance
 merit_function = 0;         % merit function
-debug = 2;                  % level of debug
-ref = true;                 % to track a desired time-varying reference
+debug = 2;                    % level of debug
+ref = true;                     % to track a desired (possibly time-varying) reference
 contractive = false;        % no constractive constraints
-terminal = false;           % no terminal constraints
+terminal = false;             % no terminal constraints
 gradients = 'casadi';
 real = 'double';
 
@@ -22,8 +22,6 @@ switch gradients
         % use of internally defined and variable step size alpha (default)
         
         variable_stepSize.active = true;
-        variable_stepSize.steady_state_state = par.xref;
-        variable_stepSize.steady_state_input = par.uref;
       
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
             'variable_stepSize',variable_stepSize,...

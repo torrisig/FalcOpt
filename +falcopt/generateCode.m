@@ -79,7 +79,7 @@
 %                                       increase_coeff: coefficient >1 by which we increase the trust-region
 %                                                   Default value: 1.33
 %                                       decrease_threshold: lower bound for the trust-region: Default value: 0.25
-%                                       decrease_coeff: coefficient >1 by which we decrease the trust-region
+%                                       decrease_coeff: coefficient <1 by which we decrease the trust-region
 %                                                   Default value: 0.75
 %   merit_function              - Merit function:
 %                                       0: Augmented Lagrangian
@@ -546,8 +546,8 @@ if o.variable_stepSize.active
                   'set the option variable_stepSize.active = ''false'' and use ''variable_stepSize.alpha_max'' for the value of alpha']);
             end
         else
-            error(['the option ''variable_stepSize.alpha_max'' must be specified, for constant step_size ' ...
-                  'set the option variable_stepSize.active = ''false'' and use ''variable_stepSize.alpha_max'' for the value of alpha']);
+            error(['if option variable_stepSize.active = ''true'' and option gradients ~= ''casadi'', then the option ''variable_stepSize.alpha_max'' must be specified. ' ...
+                  'Otherwise set the option gradients = ''casadi''']);
         end
     end
     if isfield(o.variable_stepSize,'alpha_min')
@@ -808,7 +808,7 @@ end
 optCode = [optCode, sprintf([o.indent.generic o.real ' J= 0.0, Jt = 0.0;' '\n'])];
 
 if o.variable_stepSize.active
-    data = [data, sprintf(['\n/* static data for variable step alpha */ \n'])];
+    data = [data, sprintf('\n/* static data for variable step alpha */ \n')];
     data = [data, sprintf([o.indent.data 'static ' o.real ' alpha = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ';\n'])];
     data = [data, sprintf([o.indent.data 'static ' o.real ' alpha_inverse = ' falcopt.internal.num2str(1/o.variable_stepSize.alpha_max,o.precision) ';\n'])];
     data = [data, sprintf([o.indent.data 'static ' o.real ' minus_alpha = ' falcopt.internal.num2str(-o.variable_stepSize.alpha_max,o.precision) ';\n'])];
