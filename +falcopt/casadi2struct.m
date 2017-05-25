@@ -3,7 +3,7 @@
 % - a casadi.SX matrix
 % 
 % Options:
-% - structure: Char, can be 'unique' or 'sparse'. Default: 'unique'. 
+% - structure: Char, can be 'unique', 'sparse' or 'dense'. Default: 'unique'. 
 %
 % Outputs:
 % - const: A boolean. 1 if the matrix is composed of constant values
@@ -43,7 +43,7 @@ function [const, struct] = casadi2struct(varargin)
     st.values = [];
     for( i= 1:n)
         for( j = 1:m)
-            if( ~is_equal(Mx(i,j),casadi.SX(0),2))
+            if( ~is_equal(Mx(i,j),casadi.SX(0),2))||strcmp(p.Results.structure,'dense')
                 st.rows = [ st.rows; i];
                 st.cols = [ st.cols; j];
                 st.values = [ st.values; simplify(Mx(i,j))];  
@@ -55,7 +55,11 @@ function [const, struct] = casadi2struct(varargin)
     struct.access.cols = st.cols;
     struct.access.values = st.values;
     struct.access.num = size(st.rows,1);
-
+    
+    if strcmp(p.Results.structure,'dense')
+        nnz = length(st.values);
+    end
+    
     % build matrix structure
     nz = st.values;
     val = num2cell(st.values);
@@ -69,7 +73,7 @@ function [const, struct] = casadi2struct(varargin)
     for( i = 1:nnz)
         if( ~isnumeric( val{i}))
             switch p.Results.structure
-                case 'sparse'
+                case {'sparse','dense'}
                     val{i} = ind;
                     ind = ind+1;
                 otherwise

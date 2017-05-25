@@ -601,7 +601,7 @@ code = [code, sprintf([ o.indent.code o.real ' ' o.min '(' o.real ' x, ' o.real 
 %% CasaDi model_mpc, Jacobian_u and Jacobian_x automatic generation
 switch o.gradients
     case 'casadi'
-        [d,c,i] = casadi_jacobians( o, o.dynamics,'model_mpc','','x', 'u'); % generate casadi functions
+        [d,c,i] = casadi_jacobians( o, o.dynamics,'model_mpc','jac',{'x','u'}); % generate casadi functions
         code = [code, c];
         data = [data, d];
         
@@ -618,7 +618,7 @@ switch o.gradients
         info.header = [info.header; i.header];                                  % external header file
         libr = [libr, sprintf(['#include "' i.header{:} '"' '\n'])];            % add .h file to libr
     case 'matlab'
-        [d,c,i] = matlab_jacobians(o,o.dynamics,'model_mpc','x','u');          % generate function and jacobians
+        [d,c,i] = matlab_jacobians(o,o.dynamics,'model_mpc','jac',{'x','u'});   % generate function and jacobians
         data = [data, d];
         code = [code, c];
         
@@ -1462,7 +1462,7 @@ end
 
 end
 
-function [ data, code, info] = casadi_jacobians(o,f,fName,staticName, varargin)
+function [ data, code, info] = casadi_jacobians(varargin)
 % given function f, jacobians are automatically computed using casadi and c-code
 % is generated
 %
@@ -1477,6 +1477,22 @@ function [ data, code, info] = casadi_jacobians(o,f,fName,staticName, varargin)
 % - code
 % - sxfcn: casadi functions
 % - info: containg structure of function and flops
+p = inputParser;
+p.addRequired('o');
+p.addRequired('f',@(x)isa(x,'function_handle'));
+p.addRequired('fname',@ischar);
+p.addParameter('staticName','',@ischar);
+p.addParameter('jac',{},@iscell);
+p.addParameter('jac_x',{'F','in_F','Jacobian_x'},@iscell);
+p.addParameter('jac_u',{'G','in_G','Jacobian_u'},@iscell);
+p.addParameter('fileName','casadi_fcn',@ischar);
+p.addParameter('generate_code',true,@islogical); 
+p.addParameter('structure','unique',@ischar); 
+p.parse(varargin{:});                                   
+                                                                        
+o = p.Results.o;                                                                
+f = p.Results.f;                                                                 
+fName = p.Results.fname; 
 import casadi.*
 x = SX.sym('x',o.nx);
 u = SX.sym('u',o.nu);
@@ -1484,7 +1500,7 @@ w = SX.sym('w',o.nw);
 
 data = [];
 code = [];
-sxfcn = {};
+info.sxfcn = {};
 
 
 % function
@@ -1500,7 +1516,7 @@ else
     end
 end
 
-if( isnumeric(y))   % generate static data if is not symbolic
+if( isnumeric(y))&&(length(p.Results.staticName)>0)   % generate static data if is not symbolic
     name.M = staticName;
     [d, ~, in_y] = falcopt.generateData(y, 'names', name, ...
         'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
@@ -1510,9 +1526,9 @@ if( isnumeric(y))   % generate static data if is not symbolic
     info.y = in_y;
     info.y.flops = 0;
 else
-    [~,in_y] = falcopt.casadi2struct( y);
+    [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure);
     y_f = Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
-    sxfcn{1} = y_f;
+    info.sxfcn{1} = y_f;
     try
         info.y.flops =  y_f.getAlgorithmSize(); %flops
     catch
@@ -1521,7 +1537,9 @@ else
     info.y.static = 0;
     
     % wrapper function
-    code = [code, sprintf('/* Dynamics of the system */\n')];
+    if strcmp(fName,'model_mpc') 
+        code = [code, sprintf('/* Dynamics of the system */\n')];
+    end
     if( o.nw > 0)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
@@ -1535,63 +1553,73 @@ else
     end
     
     code = [code, sprintf([o.indent.generic  fName '_casadi( in, &xp, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n'])];
-    if( ~isempty(staticName))
-        data = [data, sprintf([o.indent.generic  'static ' o.real ' ' staticName '[%i];' '\n'], in_y.stored.num)];
+    if( isnumeric(y))&&(length(p.Results.staticName)>0)
+        data = [data, sprintf([o.indent.generic  'static ' o.real ' ' p.Results.staticName '[%i];' '\n'], in_y.stored.num)];
     end
     info.y.structure = in_y;
 end
 
 % jacobians
-for k = 1:length(varargin)
-    switch varargin{k}
+for k = 1:length(p.Results.jac)
+    switch p.Results.jac{k}
         case 'x'
             jac = jacobian( y, x);
-            static_name = 'F';
-            struct_name = 'in_F';
-            J_name = 'jacobian_x_casadi';
+            static_name = p.Results.jac_x{1};
+            struct_name = p.Results.jac_x{2};
+            J_name = p.Results.jac_x{3};
         case 'u'
             jac = jacobian( y, u);
-            static_name = 'G';
-            struct_name = 'in_G';
-            J_name = 'jacobian_u_casadi';
+            static_name = p.Results.jac_u{1};
+            struct_name = p.Results.jac_u{2};
+            J_name = p.Results.jac_u{3};
         otherwise
             error('invalid variable name');
     end
-    [info.(struct_name).static,in] = falcopt.casadi2struct(jac);
+    [info.(struct_name).static,in] = falcopt.casadi2struct(jac,'structure', p.Results.structure);
     
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
-        data = [data, sprintf([o.indent.data '/* Static data for jacobian w.r.t %c variable */\n'],varargin{k})]; %#ok
-        [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
-            'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
-            'static', true, 'const', true, 'verbose', o.verbose);
-        info.(struct_name).struct = in_d;
-        info.(struct_name).flops = 0;
+        data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
+        if full(DM(jac)) ~= 0
+            [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
+                'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
+                'static', true, 'const', true, 'verbose', o.verbose);
+            info.(struct_name).struct = in_d;
+            info.(struct_name).flops = 0;
+        else
+            d = sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i]={ '],length(full(DM(jac))));
+            for j = 1:length(full(DM(jac)))-1
+                d = [d, '0.0, ']; %#ok
+            end
+            d = [d, sprintf(['0.0 };\n'])]; %#ok
+        end
         if ~isempty(d)
             data = [data, d, sprintf('\n')]; %#ok
         end
-        
+        info.(struct_name).struct.structure = in;
     else
-        jac = Function(J_name,{x,u,w},{in.stored.values});
-        sxfcn{length(sxfcn)+1} =  jac; %#ok
+        jac = Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
+        info.sxfcn{length(info.sxfcn)+1} =  jac; %#ok
         
         % wrapper jacobian
-        code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',varargin{k})]; %#ok
+        if strcmp(fName,'model_mpc')
+            code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',p.Results.jac{k})]; %#ok
+        end
         if( o.nw > 0)
-            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
+            code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
             code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
-                o.indent.generic  J_name '( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
+                o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         else
-            code = [code, sprintf(['void Jacobian_' varargin{k} '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
+            code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
             code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
-                o.indent.generic  J_name '( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
+                o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
         
-        data = [data, sprintf([o.indent.data '/* Static data for jacobian w.r.t %c variable */\n'],varargin{k})]; %#ok
+        data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
         data = [data, sprintf([o.indent.data  'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)]; %#ok
         info.(struct_name).struct.structure = in;
         try
@@ -1603,7 +1631,9 @@ for k = 1:length(varargin)
 end
 
 % generate .c file with casadi functions
-[info.src,info.header] = generate_casadi_c(o, 'casadi_fcn', sxfcn);
+if p.Results.generate_code
+    [info.src,info.header] = generate_casadi_c(o, p.Results.fileName, info.sxfcn);
+end
 
 end
 
@@ -1715,9 +1745,26 @@ else
 end
 end
 
-function [ data, code, info] = matlab_jacobians(o,f,fName,varargin)
+function [ data, code, info] = matlab_jacobians(varargin)
 % generate c code from provided function f and automatically generate jacobians
 % using matlab symbolic toolbox
+p = inputParser;
+p.addRequired('o');
+p.addRequired('f',@(x)isa(x,'function_handle'));
+p.addRequired('fname',@ischar);
+p.addParameter('staticName','',@ischar);
+p.addParameter('jac',{},@iscell);
+p.addParameter('jac_x',{'F','in_F','Jacobian_x'},@iscell);
+p.addParameter('jac_u',{'G','in_G','Jacobian_u'},@iscell);
+p.addParameter('fileName','casadi_fcn',@ischar);
+p.addParameter('generate_code',true,@islogical);
+p.addParameter('structure','unique',@ischar);
+p.parse(varargin{:});
+
+o = p.Results.o;
+f = p.Results.f;
+fName = p.Results.fname;
+
 code = [];
 data = [];
 info.y = [];
@@ -1741,9 +1788,12 @@ else
 end
 
 % function
-[d, in_y] = falcopt.fcn2struct( y,o,'name','xp');
+[d, in_y] = falcopt.fcn2struct( y,o,'name','xp','structure',p.Results.structure);
+info.y.static = in_y.static;
 
-code = [ code, sprintf('/*Dynamics of the system*/\n')];
+if strcmp(fName,'model_mpc')
+    code = [ code, sprintf('/*Dynamics of the system*/\n')];
+end
 if( o.nw > 0)
     code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
 else
@@ -1754,30 +1804,30 @@ info.y.flops = in_y.flops;
 
 
 % jacobians
-for k = 1:length(varargin)
-    switch varargin{k}
+for k = 1:length(p.Results.jac)
+    switch p.Results.jac{k}
         case 'x'
             jac = jacobian( y, x);
-            static_name = 'F';
-            struct_name = 'in_F';
-            J_name = 'Jacobian_x';
+            static_name = p.Results.jac_x{1};
+            struct_name = p.Results.jac_x{2};
+            J_name = p.Results.jac_x{3};
         case 'u'
             jac = jacobian( y, u);
-            static_name = 'G';
-            struct_name = 'in_G';
-            J_name = 'Jacobian_u';
+            static_name = p.Results.jac_u{1};
+            struct_name = p.Results.jac_u{2};
+            J_name = p.Results.jac_u{3};
         otherwise
             error('invalid variable name');
     end
-    [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
+    [d, i] = falcopt.fcn2struct( jac,o,'name', static_name,'structure',p.Results.structure); 
     info.(struct_name).static = i.static;
-    data = [ data, sprintf([o.indent.data '/*Static data for Jacobian w.r.t %c*/\n'],varargin{k})]; %#ok
+    data = [ data, sprintf([o.indent.data '/*Static data for %s*/\n'],J_name)]; %#ok
     if( info.(struct_name).static)
-        data = [data, sprintf([o.indent.data 'static const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
-        data = [data, d, sprintf([o.indent.data '};\n\n'])]; %#ok
+        data = [data, sprintf([o.indent.data 'static const ' o.real ' ' static_name '']),d,sprintf(';\n')]; %#ok
+        %data = [data, d, sprintf([o.indent.data '};\n\n'])]; %#ok
     else
         data = [data, sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
-        code = [ code, sprintf([o.indent.data '/*Jacobian w.r.t %c*/\n'],varargin{k})]; %#ok
+        code = [ code, sprintf([o.indent.data '/*%s*/\n'],J_name)]; %#ok
         if( o.nw > 0)
             code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         else

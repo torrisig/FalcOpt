@@ -90,7 +90,7 @@ function [data, info] = fcn2struct(varargin)
     % extract the function/matrix structure
     for i= 1:n
         for j= 1:m
-            if( M(i,j) ~= 0)
+            if( M(i,j) ~= 0)||isequal(p.Results.structure,'dense')
                 if ( isempty(values))
                     values = [ values; M(i,j)]; %#ok
                     indeces = [indeces, ind]; %#ok
@@ -141,6 +141,13 @@ function [data, info] = fcn2struct(varargin)
         data = [ data, sprintf([o.indent.generic 's%i = %s\n'],i,tmp)]; %#ok
     end
     
+    % if empty function save to data as double
+    if isempty(values)
+        data = [data sprintf('[1] = {0.0}')];
+        info.structure.num = 1;
+        return;
+    end
+    
     % subs. 'pow' in values where possible and save to data
     for i= 1:size(values)
         
@@ -156,10 +163,17 @@ function [data, info] = fcn2struct(varargin)
         
         if( static)
             tmp = regexprep( tmp,';','');
-            data = [ data sprintf([tmp ', '])]; %#ok
+            if i~=size(values,1)
+                data = [ data sprintf([tmp ', '])]; %#ok
+            else
+                data = [ data sprintf(tmp)]; %#ok
+            end
         else
             data = [data sprintf([o.indent.generic p.Results.name '[%i] = ' tmp '\n'], i-1)]; %#ok
         end 
+    end
+    if static
+        data = [sprintf(['[%i] = {'],info.structure.num), data, '}'];
     end
     
     % replace x1 with x[0] (the same for all x,u,w,sl vectors)
