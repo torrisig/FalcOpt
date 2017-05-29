@@ -1580,7 +1580,7 @@ for k = 1:length(p.Results.jac)
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
         data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
-        if full(DM(jac)) ~= 0
+        if ~isempty(find((full(DM(jac)) ~= 0)))
             [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
                 'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
                 'static', true, 'const', true, 'verbose', o.verbose);
