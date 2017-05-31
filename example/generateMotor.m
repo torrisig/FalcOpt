@@ -4,10 +4,10 @@ function generateMotor(par)
 eps = 1e-3;                   % tolerance
 merit_function = 0;         % merit function
 debug = 2;                    % level of debug
-ref = true;                     % to track a desired (possibly time-varying) reference
+J.trackReference = true;                     % to track a desired (possibly time-varying) reference
 contractive = false;        % no constractive constraints
 terminal = false;             % no terminal constraints
-gradients = 'casadi';
+gradients = 'matlab';
 real = 'double';
 
 %% Dynamics of the system
@@ -39,14 +39,21 @@ switch gradients
         
         variable_stepSize.active = false;
         variable_stepSize.alpha_max = 5;
+        J.Q = par.Q;
+        J.R = par.R;
+        J.P = par.P;
         
-        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
+%         J.nonlinear = @(x,u)0.5*(x'*par.Q*x + u'*par.R*u);
+%         J.nonlinearN = @(x)0.5*(x'*par.P*x);
+        
+        
+        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'variable_stepSize',variable_stepSize,...
             'constraints_handle', par.constraint,'nn',par.nn, 'gradients', gradients,...
             'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
             'contractive',contractive, 'terminal', terminal, ...
             'debug',debug,'merit_function', merit_function,...
-            'trackReference',ref,'eps',eps,'precision', real,...
+            'eps',eps,'precision', real,...
             'name', 'Motor_example_FalcOpt', 'gendir', 'generatedCode');
         
     case 'manual'
