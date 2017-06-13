@@ -173,6 +173,10 @@ function code = generateMEX(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<n; i++) { vt[i] = v[i]; }' '\n'])];
         code = [code, sprintf([options.indent.code '};' '\n'])];
     end
+    code = [code, sprintf([options.indent.code 'static ' options.inline ' void ' options.names.mex '_UINTtoMATLAB(const unsigned int* v, double* vt, unsigned int n) {' '\n'])];
+    code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int i;' '\n'])];
+    code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<n; i++) { vt[i] = (double)v[i]; }' '\n'])];
+    code = [code, sprintf([options.indent.code '};' '\n'])];
     % Generate MEX function
     nInputs = [1 1];
     if dims.w > 0
@@ -231,20 +235,30 @@ function code = generateMEX(varargin)
     end
     code = [code, sprintf([options.indent.code options.indent.generic dataType ' u[%i];' '\n'], N*dims.u)];
     code = [code, sprintf([options.indent.code options.indent.generic 'int* flag;' '\n'])];
-    code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* nitOut = mxCreateNumericMatrix(1,1, mxUINT32_CLASS, mxREAL);' '\n'])];
-    code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int* nit = (unsigned int*)mxGetData(nitOut);' '\n'])];
+    code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* nitOut = mxCreateDoubleMatrix(1,1, mxREAL);' '\n'])];
+    code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int nit[1];' '\n'])];
     if options.maxIt > 0
-        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* lineSearch_nitOut = mxCreateNumericMatrix(1,%i,mxUINT32_CLASS, mxREAL);' '\n'], options.maxIt)];
-        code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int* lineSearch_nit = (unsigned int*)mxGetData(lineSearch_nitOut);' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* lineSearch_nitOut = mxCreateDoubleMatrix(1,%i, mxREAL);' '\n'], options.maxIt)];
+        code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int lineSearch_nit[%i];' '\n'], options.maxIt)];
     end
     if options.debug > 1
         code = [code, sprintf([options.indent.code options.indent.generic dataType ' x[%i];' '\n'], N*dims.x)];
         code = [code, sprintf([options.indent.code options.indent.generic dataType ' fval[1];' '\n'])];
     end
+    if options.debug > 2
+        code = [code, sprintf([options.indent.code options.indent.generic dataType ' optimval[1];' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic dataType ' feasval[1];' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic dataType ' meritval[1];' '\n'])];
+    end
     if options.debug > 1
         code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* xOut = mxCreateDoubleMatrix(%i,%i,mxREAL);' '\n'], dims.x, N)];
         code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* fvalOut = mxCreateDoubleMatrix(1,1,mxREAL);' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* uOut = mxCreateDoubleMatrix(%i,%i,mxREAL);' '\n'], dims.u, N)];
+    end
+    if options.debug > 2
+        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* optimvalOut = mxCreateDoubleMatrix(1,1,mxREAL);' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* feasvalOut = mxCreateDoubleMatrix(1,1,mxREAL);' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* meritvalOut = mxCreateDoubleMatrix(1,1,mxREAL);' '\n'])];
     end
     code = [code, sprintf([options.indent.code options.indent.generic 'char** fieldnames;' '\n'])];
     if options.timing
@@ -380,6 +394,9 @@ function code = generateMEX(varargin)
     if options.maxIt > 0
         code = [code, sprintf(', lineSearch_nit')];
     end
+    if options.debug > 2
+        code = [code, sprintf(', optimval, feasval, meritval')];
+    end
     code = [code, sprintf([');' '\n'])];
     if options.timing
         code = [code, sprintf([options.indent.code options.indent.generic 'timer_stop(&' timerName '); /* Stop timer */' '\n'])];
@@ -393,6 +410,10 @@ function code = generateMEX(varargin)
     else
         code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(u, mxGetPr(plhs[0]), %i);' '\n'], dims.u)];
     end
+    code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(nit, mxGetPr(nitOut), 1);' '\n'])];
+    if options.maxIt > 0      
+        code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(lineSearch_nit, mxGetPr(lineSearch_nitOut), %i);' '\n'], options.maxIt)];
+    end
     if options.debug > 1
         if strcmp(options.type, 'single')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(x, mxGetPr(xOut), %i);' '\n'], N*dims.x)];
@@ -402,6 +423,17 @@ function code = generateMEX(varargin)
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(x, mxGetPr(xOut), %i);' '\n'], N*dims.x)];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(fval, mxGetPr(fvalOut), 1);' '\n'])];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(u, mxGetPr(uOut), %i);' '\n'], N*dims.u)];
+        end
+    end
+    if options.debug > 2
+        if strcmp(options.type, 'single')
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(optimval, mxGetPr(optimvalOut), 1);' '\n'])];
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(feasval, mxGetPr(feasvalOut), 1);' '\n'])];
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(meritval, mxGetPr(meritvalOut), 1);' '\n'])];
+        else
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(optimval, mxGetPr(optimvalOut), 1);' '\n'])];
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(feasval, mxGetPr(feasvalOut), 1);' '\n'])];
+            code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(meritval, mxGetPr(meritvalOut), 1);' '\n'])];
         end
     end
     code = [code, sprintf([options.indent.code options.indent.generic 'if(nlhs >= 3) {' '\n'])];
@@ -416,6 +448,9 @@ function code = generateMEX(varargin)
     if options.debug > 1
         infoFields = [infoFields {'u', 'x', 'fval'}];
     end
+    if options.debug > 2
+        infoFields = [infoFields {'optimval', 'feasval', 'meritval'}];
+    end    
     code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'fieldnames = mxCalloc(%i, sizeof(char*)); /* Allocate memory for storing pointers */' '\n'], length(infoFields))];
     for i=1:length(infoFields)
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'fieldnames[%i] = (char*)mxMalloc(sizeof(char)*%i);' '\n'], i-1, max(cellfun(@length, infoFields))+1)];
@@ -443,6 +478,11 @@ function code = generateMEX(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,3,uOut); /* u */' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,4,xOut); /* x */' '\n'])];
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,5,fvalOut); /* fval */' '\n'])];
+    end
+    if options.debug > 2
+        code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,6,optimvalOut); /* optimval */' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,7,feasvalOut); /* feasval */' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'mxSetFieldByNumber(plhs[2],0,8,meritvalOut); /* meritval */' '\n'])];
     end
     code = [code, sprintf([options.indent.code options.indent.generic '}' '\n'])];
     code = [code, sprintf([options.indent.code options.indent.generic 'if(nlhs < 2) { mxFree(flag); }' '\n'])];
