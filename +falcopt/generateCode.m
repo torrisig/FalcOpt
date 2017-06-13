@@ -783,7 +783,10 @@ c_w_dec = argument_w(o,true);
 c_tr_dec = argument_def(o,true);
 c_contr_dec = argument_contr_value(o,true);
 optCode = [optCode, sprintf(['/* main function of the algorithm */' '\n'])];
-if o.debug > 1
+if o.debug == 3
+    optCode = [optCode, sprintf(['int proposed_algorithm(const ' o.real '* x0, ' o.real '* u' c_w_dec c_tr_dec c_contr_dec ...
+        ', ' o.real '* x, ' o.real '* fval, unsigned int* iter, unsigned int* iter_ls, ' o.real '* optimval, ' o.real '* feasval, ' o.real '* meritval){' '\n' '\n'])];    
+elseif o.debug == 2
     optCode = [optCode, sprintf(['int proposed_algorithm(const ' o.real '* x0, ' o.real '* u' c_w_dec c_tr_dec c_contr_dec ...
         ', ' o.real '* x, ' o.real '* fval, unsigned int* iter, unsigned int* iter_ls){' '\n' '\n'])];
 else
@@ -805,11 +808,12 @@ else
     optCode = [optCode, sprintf([o.indent.generic  'unsigned int reset_rho = 0;' '\n'])];
 end
 
-optCode = [optCode, sprintf([o.indent.generic o.real ' J= 0.0, Jt = 0.0;' '\n'])];
+optCode = [optCode, sprintf([o.indent.generic o.real ' J= 0.0, Jt = 0.0, constr_viol = 1.0;' '\n'])];
 
 if o.variable_stepSize.active
     data = [data, sprintf('\n/* static data for variable step alpha */ \n')];
     data = [data, sprintf([o.indent.data 'static ' o.real ' alpha = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ';\n'])];
+    data = [data, sprintf([o.indent.data 'static ' o.real ' alpha_old = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ';\n'])];
     data = [data, sprintf([o.indent.data 'static ' o.real ' alpha_inverse = ' falcopt.internal.num2str(1/o.variable_stepSize.alpha_max,o.precision) ';\n'])];
     data = [data, sprintf([o.indent.data 'static ' o.real ' minus_alpha = ' falcopt.internal.num2str(-o.variable_stepSize.alpha_max,o.precision) ';\n'])];
     data = [data, sprintf([o.indent.data 'static const ' o.real ' alpha_max = ' falcopt.internal.num2str(o.variable_stepSize.alpha_max,o.precision) ';\n'])];
@@ -1320,6 +1324,7 @@ if o.variable_stepSize.active
                 o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.max '( alpha_min, alpha*gamma_1);\n'...
                 o.indent.generic o.indent.generic 'if( rat > rat_2)\n'...
                 o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.min '( alpha_max, alpha*gamma_2);\n'...
+                o.indent.generic o.indent.generic 'alpha_old = alpha; \n'...
                 o.indent.generic o.indent.generic 'alpha_inverse = 1/alpha;\n'...
                 o.indent.generic o.indent.generic 'minus_alpha = -alpha;\n\n'])];
 end
@@ -1363,8 +1368,9 @@ data = [data, d];
 
 
 optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* check convergence (update step) */' '\n'])];
+optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic 'constr_viol = compute_max_Nnc(gpsp); ' '\n'])];
 if o.variable_stepSize.active 
-    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= alpha*alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
+    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= alpha_old*alpha_old*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ')||(constr_viol>= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
 else
     optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.num2str(alpha2_eps2, o.precision) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.num2str(o.eps, o.precision) '))' '\n'])];
 end
@@ -1384,6 +1390,17 @@ optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic '
     o.indent.generic  '}' '\n\n'])];
 info.flops.it.comp = info.flops.it.comp +3;
 
+if o.debug >2
+    optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign optimality */' '\n'])];
+    if o.variable_stepSize.active 
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
+    else 
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))* ' falcopt.internal.num2str(1/o.stepPM) '; \n'])];
+    end
+    optCode = [optCode, sprintf([o.indent.generic '(*feasval) = constr_viol; ' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic '(*meritval) = phi0_dot; ' '\n'])];
+end
+    
 optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign exitflag */' '\n'])];
 optCode = [optCode,sprintf([o.indent.generic  '(*iter) = it+1;' '\n',...
     o.indent.generic  'if (conditions_f == 0)' '\n',...
@@ -1394,10 +1411,19 @@ optCode = [optCode,sprintf([o.indent.generic  '(*iter) = it+1;' '\n',...
     o.indent.generic o.indent.generic 'else {' '\n',...
     o.indent.generic o.indent.generic o.indent.generic 'if (conditions_n == 0)' '\n',...
     o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = 0;' '\n',...
-    o.indent.generic o.indent.generic o.indent.generic 'else' '\n',...
-    o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = -1;' '\n'...
+    o.indent.generic o.indent.generic o.indent.generic 'else {' '\n'])];
+if o.variable_stepSize.active
+    optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (phi0_dot < - alpha_old* ' falcopt.internal.num2str(o.eps) ') \n'])];
+else
+    optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'if (phi0_dot < - ' falcopt.internal.num2str(alpha_eps) ') \n'])];
+end    
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = -1;' '\n'...
+    o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'else' '\n'...
+    o.indent.generic o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'cond = -10;' '\n'...
+    o.indent.generic o.indent.generic o.indent.generic '}' '\n'...
     o.indent.generic o.indent.generic '}' '\n'...
     o.indent.generic  '}' '\n\n'])];
+
 if o.debug > 1
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Output cost function */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic  '*fval = J;' '\n'])];
@@ -1459,7 +1485,6 @@ if o.compile
     eval(compile);
 end
 
-
 end
 
 function [ data, code, info] = casadi_jacobians(varargin)
@@ -1516,7 +1541,7 @@ else
     end
 end
 
-if( isnumeric(y))&&(length(p.Results.staticName)>0)   % generate static data if is not symbolic
+if( isnumeric(y))&&(~isempty(p.Results.staticName))   % generate static data if is not symbolic
     name.M = staticName;
     [d, ~, in_y] = falcopt.generateData(y, 'names', name, ...
         'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
@@ -1553,7 +1578,7 @@ else
     end
     
     code = [code, sprintf([o.indent.generic  fName '_casadi( in, &xp, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n'])];
-    if( isnumeric(y))&&(length(p.Results.staticName)>0)
+    if( isnumeric(y))&&(~isempty(p.Results.staticName))
         data = [data, sprintf([o.indent.generic  'static ' o.real ' ' p.Results.staticName '[%i];' '\n'], in_y.stored.num)];
     end
     info.y.structure = in_y;
@@ -1580,7 +1605,7 @@ for k = 1:length(p.Results.jac)
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
         data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
-        if ~isempty(find((full(DM(jac)) ~= 0)))
+        if ~isempty(find((full(DM(jac)) ~= 0), 1))
             [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
                 'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
                 'static', true, 'const', true, 'verbose', o.verbose);
@@ -1599,7 +1624,7 @@ for k = 1:length(p.Results.jac)
         info.(struct_name).struct.structure = in;
     else
         jac = Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
-        info.sxfcn{length(info.sxfcn)+1} =  jac; %#ok
+        info.sxfcn{length(info.sxfcn)+1} =  jac; 
         
         % wrapper jacobian
         if strcmp(fName,'model_mpc')
@@ -4145,7 +4170,6 @@ if ischar(cost)
         J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
     end
     J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)' + u_n(end,:)*o.R*u_n(end,:)');
-else
 end
 
 % compute Hessian
