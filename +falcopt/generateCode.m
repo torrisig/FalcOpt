@@ -841,7 +841,12 @@ optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'sl[%d], sl_sqr[%
 if o.merit_function == 0
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'mu[%d], dm[%d], mup[%d],' '\n' ...
         o.indent.generic o.indent.generic 'dsl_sqr = 0.0, gps_sqr = 0.0, dm_sqr = 0.0, rho_hat_tmp = 0.0,' '\n'],sum(o.nc),sum(o.nc),sum(o.nc))];
+else
+    if o.debug > 2
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'dsl_sqr = 0.0, \n'])];
+    end
 end
+
 
 if (o.contractive || o.terminal)
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'psi_N[1], psi_Np[1], dot_psi_N[' num2str(o.N*o.nu) '],' '\n'])];
@@ -1392,6 +1397,7 @@ info.flops.it.comp = info.flops.it.comp +3;
 
 if o.debug >2
     optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign optimality */' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
     if o.variable_stepSize.active 
         optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
     else 
