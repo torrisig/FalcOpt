@@ -17,13 +17,20 @@ function [const, struct] = casadi2struct(varargin)
     p = inputParser;
     p.addRequired('sx_');
     p.addParameter('structure', 'unique');
+    p.addParameter('errorName','function');
     p.parse(varargin{:});
     sx = p.Results.sx_;
 
     try 
         sx.is_constant();
     catch
-        error('sx must be a casadi.SX matrix')
+        if isnumeric(sx)
+            struct.stored.values = sx;
+            const = 1;
+            return;
+        else
+            error(['Error evaluating ' p.Results.errorName ': sx must be a casadi.SX matrix'])
+        end
     end
 
     sx = sx.sparsify(1e-10);

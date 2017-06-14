@@ -1582,7 +1582,7 @@ if( isnumeric(y))&&(length(p.Results.staticName)>0)   % generate static data if 
     info.y = in_y;
     info.y.flops = 0;
 else
-    [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure);
+    [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure,'errorName',fName);
     y_f = Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
     info.sxfcn{1} = y_f;
    
@@ -1634,7 +1634,7 @@ for k = 1:length(p.Results.jac)
         otherwise
             error('invalid variable name');
     end
-    [info.(struct_name).static,in] = falcopt.casadi2struct(jac,'structure', p.Results.structure);
+    [info.(struct_name).static,in] = falcopt.casadi2struct(jac,'structure', p.Results.structure,'errorName',fName);
     
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
@@ -1860,7 +1860,7 @@ end
 [d, in_y] = falcopt.fcn2struct( y,o,'name','xp','structure',p.Results.structure);
 info.y.static = in_y.static;
 if info.y.static
-    error(['function ' fName ' does not depend on any variables']);
+   error(['function ' fName ' does not depend on any variables']);
 end
 
 if strcmp(fName,'model_mpc')
