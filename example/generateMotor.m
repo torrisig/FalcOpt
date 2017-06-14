@@ -12,7 +12,9 @@ real = 'double';
 
 %% Dynamics of the system
 dynamics = @(x,u) model_upd(x,u,par.Ts);
-
+% J.Q = par.Q;
+% J.R = par.R;
+% J.P = par.P;
 
 %% code generation ( with 4 different ways to generate derivatives)
 switch gradients
@@ -23,13 +25,13 @@ switch gradients
         
         variable_stepSize.active = true;
       
-        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
+        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'variable_stepSize',variable_stepSize,...
             'constraints_handle', par.constraint,'nn',par.nn, 'gradients', gradients,...
             'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
             'contractive',contractive, 'terminal', terminal, ...
             'debug',debug,'merit_function', merit_function,...
-            'trackReference',ref,'eps',eps,'precision', real,...
+            'eps',eps,'precision', real,...
             'name', 'Motor_example_FalcOpt', 'gendir', 'generatedCode');
     case 'matlab'
         % second option: Automatic differentiation via Matlab symbolic toolbox
@@ -39,12 +41,10 @@ switch gradients
         
         variable_stepSize.active = false;
         variable_stepSize.alpha_max = 5;
-        J.Q = par.Q;
-        J.R = par.R;
-        J.P = par.P;
         
-%         J.nonlinear = @(x,u)0.5*(x'*par.Q*x + u'*par.R*u);
-%         J.nonlinearN = @(x)0.5*(x'*par.P*x);
+        
+        J.nonlinear = @(x,u)0.5*(x'*par.Q*x + u'*par.R*u);
+        J.nonlinearN = @(x)0.5*(x'*par.P*x);
         
         
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
