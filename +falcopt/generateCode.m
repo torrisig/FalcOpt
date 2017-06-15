@@ -8,16 +8,22 @@
 %  N                            - Prediction horizon
 %  nx                           - Number of states
 %  nu                           - Number of inputs
-%  Q                            - Weight matrix for states (cost)
-%  P                            - Weight matrix for terminal states (cost)
-%  R                            - Weight matrix for inputs (cost)
+%  objective                    - Matlab structure with fields:
+%                                   .Q: weight matrix for states (cost)
+%                                   .R: weight matrix for inputs (cost)
+%                                   .P: weight matrix for terminal states (cost)
+%                                 or:
+%                                   .nonlinear: nonlinear cost function for stages k~=N
+%                                   .nonlinearN: nonlinear cost function for final stage k=N
+%                                 additionally:
+%                                   .trackReference: a boolean. Track a desired time-varying reference. 
+%                                                        Default: false
 %
 % The following options are available:
 %
 % Problem definition options
 %
 %   nw                          - Known disturbance dimension
-%   trackReference              - A boolean. Track a desired time-varying reference. Default: false
 %   box_lowerBound              - Lower bound constraint for the inputs: either a nu*1 or nu*N matrix
 %                                               (stage-wise variable constraints)
 %   box_upperBound              - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
@@ -4294,21 +4300,18 @@ c_tr_dec = argument_def(o,true);
 c_psi_dec = argument_def_internal_psi_noconst(o,true);
 c_psi_dot_dec = argument_def_internal_psi_dot_noconst(o,true);
 
-%% generate cost and cost_N functions
+% generate cost and cost_N functions + Jacobians
 switch o.gradients
     case 'casadi'
         import casadi.*
-        x = SX.sym('x',[o.nx,1]);
-        u = SX.sym('u',[o.nu,1]);
-        w = SX.sym('w',[o.nw,1]);
-        sxfcn = {};
+        sxfcn = {}; %#ok
         
         [d,c,i] = casadi_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
                             'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
                             'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false, 'structure','dense');          
         code = [code, c];
         data = [data, d];
-        cost_static = i.y.static;
+        cost_static = i.y.static; %#ok
         cost_x_static = i.in_cost_x.static;
         cost_u_static = i.in_cost_u.static;
         sxfcn = i.sxfcn;
@@ -4332,16 +4335,13 @@ switch o.gradients
         [info.src,info.header] = generate_casadi_c(o, 'casadi_cost', sxfcn);
         
     case {'matlab','manual'}
-        x = sym('x',[o.nx,1],'real');
-        u = sym('u',[o.nu,1],'real');
-        w = sym('w',[o.nw,1],'real');
         
         [d,c,i] = matlab_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
                             'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
                             'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false,'structure','dense');          
         code = [code, c];
         data = [data, d];
-        cost_static = i.y.static;
+        cost_static = i.y.static; %#ok
         cost_x_static = i.in_cost_x.static;
         cost_u_static = i.in_cost_u.static;
          
@@ -4373,7 +4373,6 @@ if trackRef
         nx,nu)];
 end
 if o.contractive
-%     code = [code, sprintf([o.indent.generic o.real ' Px_contr[%d], tmp_contr = 0.0;' '\n'], nx)];
     code = [code, sprintf([o.indent.generic o.real ' tmp_contr = 0.0;' '\n'], nx)];
     if trackRef
         code = [code, sprintf([o.indent.generic o.real ' dx_contr[%d];' '\n'], nx)];
@@ -4475,8 +4474,6 @@ if o.contractive||o.terminal
     if trackRef
         code = [code, sprintf([o.indent.generic o.real ' dx_contr[%d];' '\n'], nx)];
     end
-% elseif o.terminal
-%     code = [code, sprintf([o.indent.generic o.real ' Px_contr[%d], mem_tmp_contr[%d];' '\n'], nx, nx)];
 end
 code = [code, sprintf([o.indent.generic 'unsigned int ii = 0;' '\n\n'])];
 
