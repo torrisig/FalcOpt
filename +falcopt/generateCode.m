@@ -527,10 +527,10 @@ if isfield(o.variable_stepSize,'active')
         error('''variable_stepSize.active'' must be boolean');
     end
 else
-    o.variable_stepSize.active = 'false';
-    if ~isfield(o.variable_stepSize,'alpha_max')
-        o.variable_stepSize.alpha_max = 0.4;
-    end
+    o.variable_stepSize.active = true;
+%     if ~isfield(o.variable_stepSize,'alpha_max')
+%         o.variable_stepSize.alpha_max = 0.4;
+%     end
 end
 if o.variable_stepSize.active
     if isfield(o.variable_stepSize,'steady_state_state')
