@@ -97,6 +97,7 @@
 % Code generation settings
 %
 %   build_MEX                   - Produce MEX file for use in Matlab. Default: true
+%   simulink                    - Generate Simulink block. Default: false
 %   name                        - Name of the .c and .mex file (if any)
 %   gendir                      - Path of the .c file folder
 %   compile                     - Compile the generated code. Default: true
@@ -160,6 +161,7 @@ p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(
 p.addParameter('inline', '', @ischar);
 p.addParameter('name','my_code', @ischar);
 p.addParameter('build_MEX',true, @islogical);
+p.addParameter('simulink',false, @islogical);
 p.addParameter('compile', true, @islogical);
 p.addParameter('gendir', '', @ischar);
 p.addParameter('verbose', 0, @isnumeric);
@@ -1519,6 +1521,21 @@ if o.compile
     eval(compile);
 end
 
+% generate simulink DEBUG
+if o.simulink
+    simulink_fcn = falcopt.generateSFunction(o);
+    simulink_code = [libr '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
+    if ~isempty(o.gendir)
+        name = sprintf([o.gendir '/simulink_' o.name '.c']);
+    else
+       name = sprintf(['simulink_' o.name '.c']);
+    end
+    f = fopen(name, 'w+');
+    fprintf(f, simulink_code);
+    fclose(f);
+    % compile
+    eval(sprintf(['mex ' name ext_file]));
+end
 
 end
 
@@ -4227,12 +4244,18 @@ else
 end
 
 % define J
-if ischar(cost)
+if isfield(o.objective,'nonlinear')
+    for k = 1:o.N-1
+        J = J + o.objective.nonlinear(psi(k,:)',u_n(k,:)');
+    end
+    if isfield(o.objective,'nonlinearN')
+        J = J + o.objective.nonlinearN(psi(end,:)');
+    end
+else
     for k = 1:o.N-1
         J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
     end
-    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)' + u_n(end,:)*o.R*u_n(end,:)');
-else
+    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)');
 end
 
 % compute Hessian
@@ -4263,7 +4286,7 @@ info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 info.src = {};
 info.header = {};
 
-%it generates: dot_product_nx_nx, Qmul, Pmul, Rmul, dot_product_nu_nu,
+%it generates: dot_product_nx_nx, dot_product_nu_nu,
 %               product_and_sum_nu
 [c, d, in] = generate_auxiliary_functions(o);
 code = [code, c];
@@ -4277,8 +4300,7 @@ info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
 code = [code, c];
 data = [data, d];
 in.flops = falcopt.internal.multFlops(in.flops, N-1);
-info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
-info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
+info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops); % flops product_and_sum_nx in det_J_dot_J
 
 
 if trackRef
@@ -4306,6 +4328,7 @@ switch o.gradients
         import casadi.*
         sxfcn = {}; %#ok
         
+        % generate cost, cost_x, cost_u
         [d,c,i] = casadi_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
                             'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
                             'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false, 'structure','dense');          
@@ -4316,6 +4339,13 @@ switch o.gradients
         cost_u_static = i.in_cost_u.static;
         sxfcn = i.sxfcn;
         
+        %flops
+        info.flops.ls.add = info.flops.ls.add  + i.y.flops*(o.N-1);              %flops cost in det_J
+        info.flops.it.add = info.flops.it.add  + i.y.flops*(o.N-1);              %flops cost in det_J_dot_J
+        info.flops.it.add = info.flops.it.add  + i.in_cost_x.flops*(o.N-2);      %flops cost_x in det_J_dot_J
+        info.flops.it.add = info.flops.it.add  + i.in_cost_u.flops*(o.N-1);      %flops cost_u in det_J_dot_J
+        
+        % generate cost_N and cost_N_x
         if ~isfield(o.objective,'nonlinearN')
             cost_N_static = 1;
             cost_N_x_static = 1;
@@ -4330,12 +4360,18 @@ switch o.gradients
             cost_N_static = i.y.static;
             cost_N_x_static = i.in_cost_N_x.static;
             sxfcn = [sxfcn, i.sxfcn];
+            
+            %flops
+            info.flops.ls.add  = info.flops.ls.add  + i.y.flops;                  % flops cost_N in det_J
+            info.flops.ls.add  = info.flops.ls.add  + i.in_cost_N_x.flops;        % flops cost_N_x in det_J
+            info.flops.it.add  = info.flops.it.add  + i.y.flops;                  % flops cost_N in det_J_dot_J
+            info.flops.it.add  = info.flops.it.add  + i.in_cost_N_x.flops;        % flops cost_N_x in det_J_dot_J
  
         end
         [info.src,info.header] = generate_casadi_c(o, 'casadi_cost', sxfcn);
         
-    case {'matlab','manual'}
-        
+    case {'matlab'}
+        % generate cost, cost_x, cost_u
         [d,c,i] = matlab_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
                             'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
                             'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false,'structure','dense');          
@@ -4344,7 +4380,14 @@ switch o.gradients
         cost_static = i.y.static; %#ok
         cost_x_static = i.in_cost_x.static;
         cost_u_static = i.in_cost_u.static;
-         
+        
+        % flops
+        info.flops.ls = falcopt.internal.addFlops(info.flops.ls,falcopt.internal.multFlops(i.y.flops,o.N-1));          % flops cost in det_J
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.y.flops,o.N-1));          % flops cost in det_J_dot_J
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.in_cost_x.flops,o.N-2));  % flops cost_x in det_J_dot_J 
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.in_cost_u.flops,o.N-1));  % flops cost_u in det_J_dot_J 
+        
+        % generate cost_N and cost_N_x
         if ~isfield(o.objective,'nonlinearN')
             cost_N_static = 1;
             cost_N_x_static = 1;
@@ -4357,7 +4400,15 @@ switch o.gradients
                             data = [data, d];
                             cost_N_static = i.y.static;
                             cost_N_x_static = i.in_cost_N_x.static;
+                            
+             % flops
+             info.flops.ls = falcopt.internal.addFlops(info.flops.ls,i.y.flops);            % flops cost_N in det_J
+             info.flops.it = falcopt.internal.addFlops(info.flops.it,i.y.flops);            % flops cost_N in det_J_dot_J
+             info.flops.it = falcopt.internal.addFlops(info.flops.it,i.in_cost_N_x.flops);  % flops cost_N_x in det_J_dot_J
         end
+    otherwise
+        error(['nonlinear objective function with options ''manual'' or ''ccode'' not implemented yet. Use quadratic cost function with objective.Q '...
+               'objective.R and objective.P instead.']);
 end
 
 %% det_J
@@ -4654,8 +4705,8 @@ end
 
 
 if trackRef
-    code = [code, sprintf([o.indent.generic 'diffU(du, u + (ii+1)*%d, uref + (ii+1)*%d);' '\n'],nu, nu)];
-    code = [code, sprintf([o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffU(du, u + (ii+1)*%d, uref + (ii+1)*%d);' '\n'],nu, nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
     if ~cost_x_static
         code = [code, sprintf([o.indent.generic o.indent.generic 'cost_x(dx, du, Qx);' '\n'])];
     end
