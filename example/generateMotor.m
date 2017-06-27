@@ -4,17 +4,21 @@ function generateMotor(par)
 eps = 1e-3;                   % tolerance
 merit_function = 0;         % merit function
 debug = 2;                    % level of debug
-J.trackReference = true;                     % to track a desired (possibly time-varying) reference
+
 contractive = false;        % no constractive constraints
 terminal = false;             % no terminal constraints
-gradients = 'matlab';
+gradients = 'casadi';
 real = 'double';
 
 %% Dynamics of the system
 dynamics = @(x,u) model_upd(x,u,par.Ts);
-% J.Q = par.Q;
-% J.R = par.R;
-% J.P = par.P;
+
+% defining cost function
+J.Q = par.Q;
+J.R = par.R;
+J.P = par.P;
+
+J.trackReference = true;                     % to track a desired (possibly time-varying) reference
 
 %% code generation ( with 4 different ways to generate derivatives)
 switch gradients
@@ -42,11 +46,7 @@ switch gradients
         variable_stepSize.active = false;
         variable_stepSize.alpha_max = 5;
         
-        
-        J.nonlinear = @(x,u)0.5*(x'*par.Q*x + u'*par.R*u);
-        J.nonlinearN = @(x)0.5*(x'*par.P*x);
-        
-        
+ 
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'variable_stepSize',variable_stepSize,...
             'constraints_handle', par.constraint,'nn',par.nn, 'gradients', gradients,...
@@ -66,12 +66,12 @@ switch gradients
         variable_stepSize.active = false;
         variable_stepSize.alpha_max = 5;
         
-        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
+        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'constraints_handle', par.constraint,'nn',par.nn, 'gradients', gradients,...
             'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
             'contractive',contractive, 'terminal', terminal, 'variable_stepSize', variable_stepSize, ...
             'debug',debug,'merit_function', merit_function,...
-            'trackReference',ref,'eps',eps,'precision', real,...
+            'eps',eps,'precision', real,...
             'name', 'Motor_example_FalcOpt', 'gendir', 'FalcOpt',...
             'external_jacobian_x',external_jacobian_x,'external_jacobian_u',external_jacobian_u,'external_jacobian_n',external_jacobian_n);
         
@@ -81,10 +81,13 @@ switch gradients
         % jacobians and their structure (only for experienced users)
         [jac_x_struct,jac_u_struct,jac_n_struct, K_n] = jacobian_structure(par);   % function returning structure of jacobians
         
-        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, par.Q, par.P, par.R,...
+        variable_stepSize.active = false;
+        variable_stepSize.alpha_max = 5;
+        
+        info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'nn',par.nn,'contractive',contractive, 'terminal', terminal, 'gradients', gradients, ...
             'debug',debug,'merit_function', merit_function,...
-            'trackReference',ref,'eps',eps,'precision', real,...
+            'eps',eps,'precision', real,'variable_stepSize', variable_stepSize, ...
             'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
             'jac_x_struct',jac_x_struct,'jac_u_struct',jac_u_struct,...
             'jac_n_struct', jac_n_struct, 'K_n', K_n,...
