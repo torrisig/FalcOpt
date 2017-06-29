@@ -1,7 +1,7 @@
 
-plot_figures = 1;              % 1 or 0
-generate_solver = 1;        % 1: generate c-file solver
-                                      % 0: run simulation without generating solver
+plot_figures = 1;           % 1 or 0
+generate_solver = 1;        % 1: generate FalcOpt solver
+                            % 0: run simulation without generating solver
 
 %% Problem parameters
 Rr = 1.1747;

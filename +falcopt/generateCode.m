@@ -8,16 +8,22 @@
 %  N                            - Prediction horizon
 %  nx                           - Number of states
 %  nu                           - Number of inputs
-%  Q                            - Weight matrix for states (cost)
-%  P                            - Weight matrix for terminal states (cost)
-%  R                            - Weight matrix for inputs (cost)
+%  objective                    - Matlab structure with fields:
+%                                   .Q: weight matrix for states (cost)
+%                                   .R: weight matrix for inputs (cost)
+%                                   .P: weight matrix for terminal states (cost)
+%                                 or:
+%                                   .nonlinear: nonlinear cost function for stages k~=N
+%                                   .nonlinearN: nonlinear cost function for final stage k=N
+%                                 additionally:
+%                                   .trackReference: a boolean. Track a desired time-varying reference. 
+%                                                        Default: false
 %
 % The following options are available:
 %
 % Problem definition options
 %
 %   nw                          - Known disturbance dimension
-%   trackReference              - A boolean. Track a desired time-varying reference. Default: false
 %   box_lowerBound              - Lower bound constraint for the inputs: either a nu*1 or nu*N matrix
 %                                               (stage-wise variable constraints)
 %   box_upperBound              - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
@@ -91,6 +97,7 @@
 % Code generation settings
 %
 %   build_MEX                   - Produce MEX file for use in Matlab. Default: true
+%   simulink                    - Generate Simulink block. Default: false
 %   name                        - Name of the .c and .mex file (if any)
 %   gendir                      - Path of the .c file folder
 %   compile                     - Compile the generated code. Default: true
@@ -137,12 +144,13 @@ p.addRequired('dynamics', @(x)isa(x,'function_handle'));
 p.addRequired('N', @isnumeric); % prediction horizon
 p.addRequired('nx', @isnumeric); % state dimension
 p.addRequired('nu', @isnumeric); % input dimension
-p.addRequired('Q', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the state (cost)
-p.addRequired('P', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the terminal state (cost)
-p.addRequired('R', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the input (cost)
+% p.addRequired('Q', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the state (cost)
+% p.addRequired('P', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the terminal state (cost)
+% p.addRequired('R', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the input (cost)
+p.addRequired('objective',@isstruct);
 p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x))); % number of nonlinear constraints (per stage)
 p.addParameter('nw', 0, @(x) (isnumeric(x) && x>=0)); % known disturbance dimension
-p.addParameter('trackReference',false,@islogical);
+% p.addParameter('trackReference',false,@islogical);
 p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
 p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
 p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
@@ -153,6 +161,7 @@ p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(
 p.addParameter('inline', '', @ischar);
 p.addParameter('name','my_code', @ischar);
 p.addParameter('build_MEX',true, @islogical);
+p.addParameter('simulink',false, @islogical);
 p.addParameter('compile', true, @islogical);
 p.addParameter('gendir', '', @ischar);
 p.addParameter('verbose', 0, @isnumeric);
@@ -176,19 +185,36 @@ p.addParameter('external_jacobian_x', [], @(x)isa(x,'function_handle'));
 p.addParameter('external_jacobian_u', [], @(x)isa(x,'function_handle'));
 p.addParameter('external_jacobian_n', [], @(x)isa(x,'function_handle'));
 p.addParameter('variable_stepSize',{},@isstruct);
+p.addParameter('cost',[],@(x)isa(x,'function_handle'));
+p.addParameter('cost_N',[],@(x)isa(x,'function_handle'));
 p.parse(varargin{:});
 o = p.Results;
 
 %% Processing options
 % Dimensions
-if size(o.Q,1) ~= o.nx
-    error('Q matrix must be of dimension nx');
+if isfield(o.objective,'Q')
+    o.Q = o.objective.Q;
+    if size(o.Q,1) ~= o.nx
+        error('Q matrix must be of dimension nx');
+    end
+else
+    o.Q = [];
 end
-if size(o.R,1) ~= o.nu
-    error('R matrix must be of dimension nu');
+if isfield(o.objective,'R')
+    o.R = o.objective.R;
+    if size(o.R,1) ~= o.nu
+        error('R matrix must be of dimension nu');
+    end
+else
+    o.R = [];
 end
-if size(o.P,1) ~= o.nx
-    error('P matrix must be of dimension nx');
+if isfield(o.objective,'P')
+    o.P = o.objective.P;
+    if size(o.P,1) ~= o.nx
+        error('P matrix must be of dimension nx');
+    end
+else
+    o.P = [];
 end
 
 if (max(max(o.Jac_x_struct)) == Inf)
@@ -213,6 +239,32 @@ if (o.terminal && o.contractive)
     error('Cannot have both contractive and terminal constraint');
 end
 
+%% check objective fields
+if isfield( o.objective,'nonlinear')
+    if isa(o.objective.nonlinear,'function_handle')
+        if nargin(o.objective.nonlinear)~=2
+            error('cherck paramters of objective.nonlinear function. Must be (x,u)')
+        end
+    else
+        error('objective.nonlinear field must be a function handle')
+    end
+end
+if isfield( o.objective,'nonlinearN')
+    if isa(o.objective.nonlinearN,'function_handle')
+        if nargin(o.objective.nonlinearN)~=1
+            error('cherck paramters of objective.nonlinearN function. Must be (x)')
+        end
+    else
+        error('objective.nonlinearN field must be a function handle')
+    end
+end
+if isfield( o.objective,'trackReference')
+    if ~islogical(o.objective.trackReference)
+        error('objective.trackReference field can be true or false')
+    end
+else
+    o.objective.trackReference = false;
+end
 %% lower and upper bounds
 one_lowerBound = false;
 if ( ~isempty(o.box_lowerBound))
@@ -302,7 +354,7 @@ if length(o.constraints_handle) >1
         end
     end
 end
-if min(size(o.constraints_handle)== [o.N,1])
+if min(size(o.constraints_handle)== [o.N,1])&&o.N~=1
     o.constraints_handle = o.constraints_handle';
 elseif min(size(o.constraints_handle)== [1,1])
     if iscell(o.constraints_handle)
@@ -336,7 +388,7 @@ end
 % check dims of the function handles
 if ((any(size(o.nn)~= [1,o.N]))&&(any(size(o.nn)~= [o.N,1])))&&(any(size(o.nn)~= [1,1]))
     error('nn can either be a scalar (same nonlinear constraint for every stage) or a vector of dims [N,1] (variable nonlinear constraint)');
-elseif min(size(o.nn) == [o.N,1])
+elseif min(size(o.nn) == [o.N,1])&&o.N~= 1
     o.nn = o.nn';
 elseif min(size(o.nn) == [1,1])
     if iscell(o.nn)
@@ -477,10 +529,10 @@ if isfield(o.variable_stepSize,'active')
         error('''variable_stepSize.active'' must be boolean');
     end
 else
-    o.variable_stepSize.active = 'false';
-    if ~isfield(o.variable_stepSize,'alpha_max')
-        o.variable_stepSize.alpha_max = 0.4;
-    end
+    o.variable_stepSize.active = true;
+%     if ~isfield(o.variable_stepSize,'alpha_max')
+%         o.variable_stepSize.alpha_max = 0.4;
+%     end
 end
 if o.variable_stepSize.active
     if isfield(o.variable_stepSize,'steady_state_state')
@@ -873,7 +925,17 @@ else
     optCode = [optCode, sprintf([o.indent.generic  'det_x(x0,u,x);' '\n'])];
 end
 
-[c, d, in] = generate_objective_gradient_oracle(o);
+if isempty(o.Q)&&isempty(o.R)&&isempty(o.P)
+    [c, d, in] = general_objective_gradient_oracle(o);
+    info.src = [info.src; in.src];
+    info.header = [info.header; in.header];
+    if ~isempty(in.header)
+        libr = [libr, sprintf(['#include "' in.header{:} '"' '\n'])];
+    end
+else
+    [c, d, in] = generate_objective_gradient_oracle(o);
+end
+
 % this function generates det_J_and_dot_J and det_J
 code = [code, c];
 data = [data, d];
@@ -1444,7 +1506,7 @@ info.flops.once.comp = info.flops.once.comp +3;
 if o.build_MEX
     mexName = o.name;
     mexCode = falcopt.generateMEX(o.N, struct('x',o.nx,'u',o.nu,'w',o.nw), 'names',...
-        struct('fun','proposed_algorithm','mex',mexName), 'ref', o.trackReference,...
+        struct('fun','proposed_algorithm','mex',mexName), 'ref', o.objective.trackReference,...
         'terminalContraction', o.terminal || o.contractive, 'indexContraction',...
         o.contractive, 'type', o.real,'maxIt',o.maxIt, 'timing', true, 'debug', o.debug,...
         'verbose', o.verbose, 'indent', o.indent, 'inline', o.inline, 'precision', o.precision);
@@ -1491,6 +1553,25 @@ if o.compile
     eval(compile);
 end
 
+% generate simulink DEBUG
+if o.simulink
+    simulink_fcn = falcopt.generateSFunction(o.nx,o.nu,o.nw,o.N, 'maxIt',o.maxIt,...
+                            'name',sprintf(['simulink_' o.name]), 'trackReference',o.objective.trackReference,...
+                            'terminal',o.terminal, 'contractive',o.contractive, ...
+                            'indent',o.indent.generic, 'precision',o.precision, ...
+                            'type', o.real, 'debug', o.debug);
+    simulink_code = [libr '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
+    if ~isempty(o.gendir)
+        name = sprintf([o.gendir '/simulink_' o.name '.c']);
+    else
+       name = sprintf(['simulink_' o.name '.c']);
+    end
+    f = fopen(name, 'w+');
+    fprintf(f, simulink_code);
+    fclose(f);
+    % compile
+    eval(sprintf(['mex ' name ext_file]));
+end
 end
 
 function [ data, code, info] = casadi_jacobians(varargin)
@@ -1542,6 +1623,8 @@ elseif( nargin(f) == 2)
 else
     if( strcmp(fName,'model_mpc'))
         error('Check number of dynamics inputs, can be (x,u) or (x,u,w)');
+    elseif strcmp(fName,'cost_N')
+        y = f(x);
     else
         error(['Check number of ' fName ' inputs, can be (x,u) or (x,u,w)']);
     end
@@ -1557,30 +1640,33 @@ if( isnumeric(y))&&(~isempty(p.Results.staticName))   % generate static data if 
     info.y = in_y;
     info.y.flops = 0;
 else
-    [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure);
+    [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure,'errorName',fName);
     y_f = Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
     info.sxfcn{1} = y_f;
-    try
-        info.y.flops =  y_f.getAlgorithmSize(); %flops
-    catch
-        warning('Cannot use casadi.Function.getAlgoirthmSize()');
-    end
+   
+    info.y.flops =  y_f.getAlgorithmSize(); %flops
+
     info.y.static = 0;
     
     % wrapper function
     if strcmp(fName,'model_mpc') 
         code = [code, sprintf('/* Dynamics of the system */\n')];
     end
-    if( o.nw > 0)
+    if( nargin(f) == 3)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
         code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n'])];
-    else
+    elseif( nargin(f) == 2)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)];
         code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n'])];
+    elseif( nargin(f) == 1)
+        code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* xp){' '\n\n'])];
+        code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)];
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf(['\tin[0] = x;\n\n'])];
     end
     
     code = [code, sprintf([o.indent.generic  fName '_casadi( in, &xp, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n'])];
@@ -1606,7 +1692,7 @@ for k = 1:length(p.Results.jac)
         otherwise
             error('invalid variable name');
     end
-    [info.(struct_name).static,in] = falcopt.casadi2struct(jac,'structure', p.Results.structure);
+    [info.(struct_name).static,in] = falcopt.casadi2struct(jac,'structure', p.Results.structure,'errorName',fName);
     
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
@@ -1623,6 +1709,7 @@ for k = 1:length(p.Results.jac)
                 d = [d, '0.0, ']; %#ok
             end
             d = [d, sprintf(['0.0 };\n'])]; %#ok
+            info.(struct_name).flops = 0;
         end
         if ~isempty(d)
             data = [data, d, sprintf('\n')]; %#ok
@@ -1636,17 +1723,23 @@ for k = 1:length(p.Results.jac)
         if strcmp(fName,'model_mpc')
             code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',p.Results.jac{k})]; %#ok
         end
-        if( o.nw > 0)
+        if( nargin(f) == 3)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
             code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
-        else
+        elseif( nargin(f) == 2)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
             code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
+                o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
+        elseif( nargin(f) == 1)
+            code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* res){' '\n\n'])]; %#ok
+            code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],1,0,0)]; %#ok
+            code = [code, sprintf(['\tin[0] = x;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
         
@@ -1657,6 +1750,7 @@ for k = 1:length(p.Results.jac)
             info.(struct_name).flops =   jac.getAlgorithmSize(); %flops
         catch
             warning('Cannot use casadi.Function.getAlgoirthmSize()');
+            info.(struct_name).flops = 0;
         end
     end
 end
@@ -1813,6 +1907,8 @@ elseif( nargin(f) == 2)
 else
     if( strcmp(fName,'model_mpc'))
         error('Check number of dynamics inputs, can be (x,u) or (x,u,w)');
+    elseif strcmp( fName,'cost_N')  
+        y = f(x);
     else
         error(['Check number of ' fName ' inputs, can be (x,u) or (x,u,w)']);
     end
@@ -1821,14 +1917,19 @@ end
 % function
 [d, in_y] = falcopt.fcn2struct( y,o,'name','xp','structure',p.Results.structure);
 info.y.static = in_y.static;
+if info.y.static
+   error(['function ' fName ' does not depend on any variables']);
+end
 
 if strcmp(fName,'model_mpc')
     code = [ code, sprintf('/*Dynamics of the system*/\n')];
 end
-if( o.nw > 0)
+if( nargin(f) == 3)
     code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
-else
+elseif( nargin(f) == 2)
     code = [code, sprintf(['void ' fName '(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
+elseif (nargin(f) == 1)
+    code = [code, sprintf(['void ' fName '(const ' o.real '* x, ' o.real '* xp){\n\n'])];
 end
 code = [ code, d, sprintf('}\n\n')];
 info.y.flops = in_y.flops;
@@ -1859,10 +1960,12 @@ for k = 1:length(p.Results.jac)
     else
         data = [data, sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
         code = [ code, sprintf([o.indent.data '/*%s*/\n'],J_name)]; %#ok
-        if( o.nw > 0)
+        if( nargin(f) == 3)
             code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
-        else
+        elseif( nargin(f) == 2)
             code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+        elseif( nargin(f) == 1)
+            code = [code, sprintf([o.indent.code 'static ' o.inline ' void ' J_name '(const ' o.real ' * x, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         end
         code = [code, d, sprintf([o.indent.code '}\n\n'])]; %#ok
     end
@@ -2283,7 +2386,7 @@ end
 
 c = [];
 
-if o.trackReference
+if o.objective.trackReference
     c = [c, sprintf([', ' str_real 'xref, ' str_real 'uref'])];
 end
 if o.contractive
@@ -2428,7 +2531,7 @@ nx = o.nx;
 nu = o.nu;
 nw = o.nw;
 N = o.N;
-trackRef = o.trackReference;
+trackRef = o.objective.trackReference;
 
 code = [];
 data = [];
@@ -2775,40 +2878,45 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 nx = o.nx;
 nu = o.nu;
 Q = o.Q;
-R = o.R;
 P = o.P;
+R = o.R;
 
-code = [code, sprintf(['\n' '/* It computes Q*x */' '\n'])];
-[d, c, in] = falcopt.generateMVMult(Q, ...
-    'names', struct('fun', 'Qmul', 'M', 'Q', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-
-if ~isempty(d)
-    data = [data, d, sprintf('\n')];
+if ~isempty(Q)
+    code = [code, sprintf(['\n' '/* It computes Q*x */' '\n'])];
+    [d, c, in] = falcopt.generateMVMult(Q, ...
+        'names', struct('fun', 'Qmul', 'M', 'Q', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+    
+    if ~isempty(d)
+        data = [data, d, sprintf('\n')];
+    end
+    code = [code, c, sprintf('\n\n')];
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
-code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
-code = [code, sprintf(['\n' '/* It computes P*x */' '\n'])];
-[d, c] = falcopt.generateMVMult(P, ...
-    'names', struct('fun', 'Pmul', 'M', 'P', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
-% flops of Pmul are counted together with Qmul
-
-
-if ~isempty(d)
-    data = [data, d, sprintf('\n')];
+if ~isempty(P)
+    code = [code, sprintf(['\n' '/* It computes P*x */' '\n'])];
+    [d, c] = falcopt.generateMVMult(P, ...
+        'names', struct('fun', 'Pmul', 'M', 'P', 'v', 'dx'), 'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+    % flops of Pmul are counted together with Qmul
+    if ~isempty(d)
+        data = [data, d, sprintf('\n')];
+    end
+    code = [code, c, sprintf('\n\n')];
 end
-code = [code, c, sprintf('\n\n')];
 
-code = [code, sprintf(['\n' '/* It computes R*u */' '\n'])];
-[d, c, in] = falcopt.generateMVMult(R, ...
-    'names', struct('fun', 'Rmul', 'M', 'R', 'v', 'du'), 'types', o.real,...
-    'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
 
-if ~isempty(d)
-    data = [data, d, sprintf('\n')];
+if ~isempty(R)
+    code = [code, sprintf(['\n' '/* It computes R*u */' '\n'])];
+    [d, c, in] = falcopt.generateMVMult(R, ...
+        'names', struct('fun', 'Rmul', 'M', 'R', 'v', 'du'), 'types', o.real,...
+        'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent);
+    
+    if ~isempty(d)
+        data = [data, d, sprintf('\n')];
+    end
+    code = [code, c, sprintf('\n\n')];
+    info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 end
-code = [code, c, sprintf('\n\n')];
-info.flops = falcopt.internal.addFlops(info.flops, in.flops);
 
 code = [code, sprintf(['\n' '/* dot product x^top *x */' '\n'])];
 [d, c, in] = falcopt.generateMVMult(ones(1,nx), ...
@@ -4171,11 +4279,17 @@ else
 end
 
 % define J
-if ischar(cost)
+if isfield(o.objective,'nonlinear')
+    for k = 1:o.N-1
+        J = J + o.objective.nonlinear(psi(k,:)',u_n(k,:)');
+    end
+    if isfield(o.objective,'nonlinearN')
+        J = J + o.objective.nonlinearN(psi(end,:)');
+    end
     for k = 1:o.N-1
         J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
     end
-    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)' + u_n(end,:)*o.R*u_n(end,:)');
+    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)');
 end
 
 % compute Hessian
@@ -4190,4 +4304,474 @@ else
     alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref))));
 end
     
+end
+
+function [code, data, info] = general_objective_gradient_oracle(o)
+nx = o.nx;
+nu = o.nu;
+nw = o.nw;
+N = o.N;
+trackRef = o.objective.trackReference;
+
+code = [];
+data = [];
+info.flops.it = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
+info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
+info.src = {};
+info.header = {};
+
+%it generates: dot_product_nx_nx, dot_product_nu_nu,
+%               product_and_sum_nu
+[c, d, in] = generate_auxiliary_functions(o);
+code = [code, c];
+data = [data, d];
+in.flops = falcopt.internal.multFlops(in.flops, N);
+info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
+info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
+
+
+[c, d, in] = generate_product_and_sum_nx(o);
+code = [code, c];
+data = [data, d];
+in.flops = falcopt.internal.multFlops(in.flops, N-1);
+info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops); % flops product_and_sum_nx in det_J_dot_J
+
+
+if trackRef
+    [c, d, in] = generate_diffXU(o);
+    code = [code, c];
+    data = [data, d];
+    in.flops = falcopt.internal.multFlops(in.flops, N);
+    info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops);
+    info.flops.ls = falcopt.internal.addFlops(info.flops.ls,in.flops);
+end
+
+[c,d] = generate_copy(o);
+% generate copy_Nnc copy_Nnu copy_Nnx
+code = [code, c];
+data = [data, d];
+
+c_w_dec = argument_w(o,true);
+c_tr_dec = argument_def(o,true);
+c_psi_dec = argument_def_internal_psi_noconst(o,true);
+c_psi_dot_dec = argument_def_internal_psi_dot_noconst(o,true);
+
+% generate cost and cost_N functions + Jacobians
+switch o.gradients
+    case 'casadi'
+        import casadi.*
+        sxfcn = {}; %#ok
+        
+        % generate cost, cost_x, cost_u
+        [d,c,i] = casadi_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
+                            'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
+                            'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false, 'structure','dense');          
+        code = [code, c];
+        data = [data, d];
+        cost_static = i.y.static; %#ok
+        cost_x_static = i.in_cost_x.static;
+        cost_u_static = i.in_cost_u.static;
+        sxfcn = i.sxfcn;
+        
+        %flops
+        info.flops.ls.add = info.flops.ls.add  + i.y.flops*(o.N-1);              %flops cost in det_J
+        info.flops.it.add = info.flops.it.add  + i.y.flops*(o.N-1);              %flops cost in det_J_dot_J
+        info.flops.it.add = info.flops.it.add  + i.in_cost_x.flops*(o.N-2);      %flops cost_x in det_J_dot_J
+        info.flops.it.add = info.flops.it.add  + i.in_cost_u.flops*(o.N-1);      %flops cost_u in det_J_dot_J
+        
+        % generate cost_N and cost_N_x
+        if ~isfield(o.objective,'nonlinearN')
+            cost_N_static = 1;
+            cost_N_x_static = 1;
+            data = [ data, sprintf('static const cost_N_x_data[1] = {0.0};\n')];
+        else
+            [d,c,i] = casadi_jacobians(o,o.objective.nonlinearN,'cost_N','staticName','cost_N','jac',{'x'},...
+                                'jac_x',{'cost_N_x_data','in_cost_N_x','cost_N_x'},...
+                                'fileName','casadi_cost_N','generate_code',false,'structure','dense');   
+
+            code = [code, c];
+            data = [data, d];
+            cost_N_static = i.y.static;
+            cost_N_x_static = i.in_cost_N_x.static;
+            sxfcn = [sxfcn, i.sxfcn];
+            
+            %flops
+            info.flops.ls.add  = info.flops.ls.add  + i.y.flops;                  % flops cost_N in det_J
+            info.flops.ls.add  = info.flops.ls.add  + i.in_cost_N_x.flops;        % flops cost_N_x in det_J
+            info.flops.it.add  = info.flops.it.add  + i.y.flops;                  % flops cost_N in det_J_dot_J
+            info.flops.it.add  = info.flops.it.add  + i.in_cost_N_x.flops;        % flops cost_N_x in det_J_dot_J
+ 
+        end
+        [info.src,info.header] = generate_casadi_c(o, 'casadi_cost', sxfcn);
+        
+    case {'matlab'}
+        % generate cost, cost_x, cost_u
+        [d,c,i] = matlab_jacobians(o,o.objective.nonlinear,'cost','staticName','cost','jac',{'x','u'},...
+                            'fileName','casadi_cost','jac_x',{'cost_x_data','in_cost_x','cost_x'},...
+                            'jac_u',{'cost_u_data','in_cost_u','cost_u'},'generate_code',false,'structure','dense');          
+        code = [code, c];
+        data = [data, d];
+        cost_static = i.y.static; %#ok
+        cost_x_static = i.in_cost_x.static;
+        cost_u_static = i.in_cost_u.static;
+        
+        % flops
+        info.flops.ls = falcopt.internal.addFlops(info.flops.ls,falcopt.internal.multFlops(i.y.flops,o.N-1));          % flops cost in det_J
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.y.flops,o.N-1));          % flops cost in det_J_dot_J
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.in_cost_x.flops,o.N-2));  % flops cost_x in det_J_dot_J 
+        info.flops.it = falcopt.internal.addFlops(info.flops.it,falcopt.internal.multFlops(i.in_cost_u.flops,o.N-1));  % flops cost_u in det_J_dot_J 
+        
+        % generate cost_N and cost_N_x
+        if ~isfield(o.objective,'nonlinearN')
+            cost_N_static = 1;
+            cost_N_x_static = 1;
+            data = [ data, sprintf('static const cost_N_x_data[1] = {0.0};\n')];
+        else
+            [d,c,i] = matlab_jacobians(o,o.objective.nonlinearN,'cost_N','staticName','cost_N','jac',{'x'},...
+                                'jac_x',{'cost_N_x_data','in_cost_N_x','cost_N_x'},...
+                                'fileName','casadi_cost_N','generate_code',false,'structure','dense'); 
+                            code = [code, c];
+                            data = [data, d];
+                            cost_N_static = i.y.static;
+                            cost_N_x_static = i.in_cost_N_x.static;
+                            
+             % flops
+             info.flops.ls = falcopt.internal.addFlops(info.flops.ls,i.y.flops);            % flops cost_N in det_J
+             info.flops.it = falcopt.internal.addFlops(info.flops.it,i.y.flops);            % flops cost_N in det_J_dot_J
+             info.flops.it = falcopt.internal.addFlops(info.flops.it,i.in_cost_N_x.flops);  % flops cost_N_x in det_J_dot_J
+        end
+    otherwise
+        error(['nonlinear objective function with options ''manual'' or ''ccode'' not implemented yet. Use quadratic cost function with objective.Q '...
+               'objective.R and objective.P instead.']);
+end
+
+%% det_J
+
+code = [code, sprintf([o.inline ' void det_J(const ' o.real '* x0, const ' o.real ...
+    '* u, const ' o.real '* x' c_tr_dec ', ' ...
+    o.real '* J' c_psi_dec '){' '\n\n',...
+    ])];
+code = [code, sprintf([o.indent.generic o.real ' tmp_N,tmp_cost;' '\n'])];
+
+if trackRef
+    code = [code, sprintf([o.indent.generic o.real ' dx[%d], du[%d];' '\n'],...
+        nx,nu)];
+end
+if o.contractive
+    code = [code, sprintf([o.indent.generic o.real ' tmp_contr = 0.0;' '\n'], nx)];
+    if trackRef
+        code = [code, sprintf([o.indent.generic o.real ' dx_contr[%d];' '\n'], nx)];
+    end
+end
+code = [code, sprintf([o.indent.generic 'unsigned int ii = 0;' '\n\n'])];
+
+if trackRef
+    code = [code, sprintf([o.indent.generic 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
+    if ~cost_N_static
+        code = [code, sprintf([o.indent.generic 'cost_N( dx, &tmp_N);' '\n'])];
+    end
+    if o.contractive
+        code = [code, sprintf([o.indent.generic 'diffX(dx_contr, x + (ind - 1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
+        if ~cost_N_static
+            code = [code, sprintf([o.indent.generic 'cost_N( dx_contr, &tmp_contr);' '\n'])];
+        end
+        code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_contr;' '\n'])];
+    end
+else
+    if ~cost_N_static
+        code = [code, sprintf([o.indent.generic 'cost_N( x + %d, &tmp_N);' '\n'],(N-1)*nx)];
+    end
+    if o.contractive
+        if ~cost_N_static
+            code = [code, sprintf([o.indent.generic 'cost_N( x + (ind - 1)*%d, &tmp_contr);' '\n'],nx)];
+        end
+        code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_contr;' '\n'])];
+    end
+end
+
+code = [code, sprintf([o.indent.generic '(*J) = tmp_N;' '\n'])];
+if o.terminal
+    code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_N;' '\n'])];
+end
+
+code = [code, sprintf(['\n' o.indent.generic 'for (ii=%d; ii-->0; ) {' '\n\n'],N-1)];
+
+
+if trackRef
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffU(du, u + (ii+1)*%d, uref + (ii+1)*%d);' '\n'],nu, nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'cost(dx, du, &tmp_cost);' '\n'])];
+else
+    code = [code, sprintf([o.indent.generic o.indent.generic 'cost(x + ii*%d, u + (ii+1)*%d, &tmp_cost);' '\n'],nx,nu)];
+end
+
+code = [code, sprintf([o.indent.generic o.indent.generic '(*J) += tmp_cost;' '\n'...
+    o.indent.generic '}' '\n'])];
+if trackRef
+    code = [code, sprintf([o.indent.generic 'diffU(du, u , uref);' '\n'])];
+    code = [code, sprintf([o.indent.generic 'cost(x0, du, &tmp_cost);' '\n'])];
+    code = [code, sprintf([o.indent.generic '(*J) += tmp_cost;' '\n'])];
+else
+    code = [code, sprintf([o.indent.generic 'cost(x0, u, &tmp_cost);' '\n'])];
+    code = [code, sprintf([o.indent.generic '(*J) += tmp_cost;' '\n'])];
+end
+code = [code, sprintf(['}' '\n\n'])];
+
+%% det_J_and_dot_J
+
+code = [code, sprintf([o.inline ' void det_J_and_dot_J(const ' o.real '* x0, const ' o.real ...
+    '* u, const ' o.real '* x' c_w_dec c_tr_dec ', ' ...
+    o.real '* J, ' o.real '* dot_J' c_psi_dec c_psi_dot_dec '){' '\n\n',...
+    ])];
+
+code = [code, sprintf([o.indent.generic o.real ' Px[%d], Ru[%d], Qx[%d], mem_tmp2[%d], ' '\n'...
+    o.indent.generic o.indent.generic 'tmp_x = 0.0, tmp_u = 0.0;' '\n'],...
+    nx,nu,nx,nx)];
+
+if o.contractive
+    code = [code, sprintf([o.indent.generic 'int index = 0;' '\n'])];
+end
+
+code = [code, sprintf([o.indent.generic o.real ' tmp_N, tmp_cost;' '\n'])];
+if cost_N_x_static
+    data_cost_N_x = 'cost_N_x_data';
+else
+    data_cost_N_x = 'Px_N';
+    code = [code, sprintf([o.indent.generic o.real ' Px_N[%d];' '\n'],nx)];
+end
+if cost_x_static
+    data_cost_x = 'cost_x_data';
+else
+    data_cost_x = 'Qx';
+end
+if cost_u_static
+    data_cost_u = 'cost_u_data';
+else
+    data_cost_u = 'Ru';
+end
+
+if trackRef
+    code = [code, sprintf([o.indent.generic o.real ' dx[%d], du[%d];' '\n'],...
+        nx,nu)];
+end
+if o.contractive||o.terminal
+    code = [code, sprintf([o.indent.generic o.real ' Px_contr[%d], mem_tmp_contr[%d], tmp_contr = 0.0;' '\n'], nx,nx)];
+    if trackRef
+        code = [code, sprintf([o.indent.generic o.real ' dx_contr[%d];' '\n'], nx)];
+    end
+end
+code = [code, sprintf([o.indent.generic 'unsigned int ii = 0;' '\n\n'])];
+
+
+if trackRef
+    code = [code, sprintf([o.indent.generic 'diffX(dx, x + %d, xref + %d);' '\n'],(N-1)*nx, (N-1)*nx)];
+    if ~cost_N_static
+        code = [code, sprintf([o.indent.generic 'cost_N( dx, &tmp_N);' '\n'])];
+    end
+    if o.contractive
+        code = [code, sprintf([o.indent.generic 'diffX(dx_contr, x + (ind - 1)*%d, xref + (ind-1)*%d);' '\n'],nx, nx)];
+        if ~cost_N_static
+            code = [code, sprintf([o.indent.generic 'cost_N( dx_contr, &tmp_contr);' '\n'])];
+        end
+        if ~cost_N_x_static
+            code = [code, sprintf([o.indent.generic 'cost_N_x( dx_contr, Px_contr);' '\n'])];
+        else
+            code = [code, sprintf([o.indent.generic 'copy_nx( Px_contr, cost_N_x_data);' '\n'])];
+        end
+        code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_contr;' '\n'])];
+    end
+else
+    if ~cost_N_static
+        code = [code, sprintf([o.indent.generic 'cost_N( x + %d, &tmp_N);' '\n'],(N-1)*nx)];
+    end
+    if o.contractive
+        if ~cost_N_static
+            code = [code, sprintf([o.indent.generic 'cost_N( x + (ind - 1)*%d, &tmp_contr);' '\n'],nx)];
+        end
+        if ~cost_N_x_static
+            code = [code, sprintf([o.indent.generic 'cost_N_x( x + (ind - 1)*%d, Px_contr);' '\n'],nx)];
+        else
+            code = [code, sprintf([o.indent.generic 'copy_nx( Px_contr, cost_N_x_data);' '\n'])];
+        end
+        code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_contr;' '\n'])];
+    end
+end
+
+code = [code, sprintf([o.indent.generic '(*J) = tmp_N;' '\n'])];
+if o.terminal
+    code = [code, sprintf([o.indent.generic '(*psi_N) = tmp_N;' '\n'])];
+end
+
+if trackRef
+    if ~cost_N_x_static
+        code = [code, sprintf([o.indent.generic 'cost_N_x( dx, Px_N);' '\n'],(N-1)*nx)];
+    end
+else
+    if ~cost_N_x_static
+        code = [code, sprintf([o.indent.generic 'cost_N_x( x + %d, Px_N);' '\n'],(N-1)*nx)];
+    end
+end
+
+
+if o.terminal
+    code = [code, sprintf([o.indent.generic 'copy_nx(Px_contr,' data_cost_N_x ');' '\n'])]; 
+end
+
+
+if trackRef
+    code = [code, sprintf([o.indent.generic 'diffU(du, u + %d, uref + %d);' '\n'],(N-1)*nu, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic 'diffX(dx, x + %d, xref + %d);' '\n'],(N-2)*nx, (N-2)*nx)];
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic 'cost_u(dx, du, Ru);' '\n'])];
+    end
+    code = [code, sprintf([o.indent.generic 'cost(dx, du, &tmp_cost);' '\n'])];
+else
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic 'cost_u(x + %d, u + %d, Ru);' '\n'],(N-2)*nx,(N-1)*nu)];
+    end
+    code = [code, sprintf([o.indent.generic 'cost(x + %d, u + %d, &tmp_cost);' '\n'],(N-2)*nx,(N-1)*nu)];
+end
+code = [code, sprintf([o.indent.generic '(*J) += tmp_cost;' '\n'])];
+
+if o.nw > 0
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic 'Jacobian_u(x + %d,u + %d, w + %d, G);' '\n'],(N-2)*nx,(N-1)*nu,(N-1)*nw)];
+    end
+else
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic 'Jacobian_u(x + %d,u + %d, G);' '\n'],(N-2)*nx,(N-1)*nu)];
+    end
+end
+
+code = [code, sprintf([o.indent.generic 'product_and_sum_nu(dot_J + %d,' data_cost_N_x ', ' data_cost_u ', G);' '\n\n'], (N-1)*nu)];
+
+if o.terminal
+    code = [code, sprintf([o.indent.generic 'product_contr_nu(&dot_psi_N[%d], ' data_cost_N_x ', G);' '\n\n'], (N-1)*nu)];
+elseif o.contractive
+    code = [code, sprintf([o.indent.generic 'if (ind == %d) ' '\n'...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic 'else' '\n'...
+        o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
+end
+
+
+
+if o.contractive
+    code = [code, sprintf([o.indent.generic 'if (ind == %d) ' '\n'...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[%d], Px_contr, G);' '\n'], N, (N-1)*nu)];
+    code = [code, sprintf([o.indent.generic 'else' '\n'...
+        o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[%d]);' '\n\n'], (N-1)*nu)];
+end
+
+code = [code, sprintf([o.indent.generic 'copy_nx(Px,' data_cost_N_x ');' '\n'])]; 
+
+
+code = [code, sprintf(['\n' o.indent.generic 'for (ii=%d; ii-->0; ) {' '\n\n'],N-1)];
+
+if o.nw > 0
+    if ~o.Jac_x_static
+        code = [code, sprintf([o.indent.generic o.indent.generic 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, w + (ii+1)*%d, F);' '\n'],nx,nu,nw)];
+        info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
+        
+    end
+else
+    if ~o.Jac_x_static
+        code = [code, sprintf([o.indent.generic o.indent.generic 'Jacobian_x(x + ii*%d,u + (ii+1)*%d, F);' '\n'],nx,nu)];
+        info.flops.it.mul = info.flops.it.mul+ 2*(N-1);
+    end
+end
+
+code = [code, sprintf([o.indent.generic o.indent.generic 'if (ii==0){' '\n'])];
+if o.nw>0
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x0,u,w,G);' '\n'])];
+    end
+else
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x0,u,G);' '\n'])];
+    end
+end
+if trackRef
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)]; 
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost(x0, du, &tmp_cost);' '\n'])];
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost_u(x0, du, Ru);' '\n'])];
+    end
+else
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost(x0, u , &tmp_cost);' '\n'])];
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost_u( x0, u , Ru);' '\n'])];
+    end
+end
+code = [code, sprintf([o.indent.generic o.indent.generic '}\n'...
+                o.indent.generic o.indent.generic 'else{' '\n'])];
+if o.nw>0
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, w + ii*%d, G);' '\n'],nx,nu,nw)];
+    end
+else
+    if ~o.Jac_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'Jacobian_u(x + (ii-1)*%d, u + ii*%d, G);' '\n'],nx,nu)];
+    end
+end
+if trackRef
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'diffX(dx, x + (ii-1)*%d, xref + (ii-1)*%d);' '\n'],nx, nx)];
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'diffU(du, u + ii*%d, uref + ii*%d);' '\n'],nu, nu)]; 
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost(dx, du, &tmp_cost);' '\n'])];
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost_u(dx, du, Ru);' '\n'])];
+    end
+else
+    code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost(x + (ii-1)*%d, u + ii*%d, &tmp_cost);' '\n'],nx,nu)];
+    if ~cost_u_static
+        code = [code, sprintf([o.indent.generic o.indent.generic o.indent.generic 'cost_u( x + (ii-1)*%d, u + ii*%d, Ru);' '\n'],nx,nu)];
+    end
+end
+code = [code, sprintf([o.indent.generic o.indent.generic '}\n\n'])];
+code = [code, sprintf([o.indent.generic o.indent.generic '(*J) += tmp_cost;' '\n'])];
+
+if o.terminal
+    code = [code, sprintf([o.indent.generic o.indent.generic 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
+        o.indent.generic o.indent.generic 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
+        o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n\n'], nu)];
+end
+
+
+
+if trackRef
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffU(du, u + (ii+1)*%d, uref + (ii+1)*%d);' '\n'],nu, nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'diffX(dx, x + ii*%d, xref + ii*%d);' '\n'],nx, nx)];
+    if ~cost_x_static
+        code = [code, sprintf([o.indent.generic o.indent.generic 'cost_x(dx, du, Qx);' '\n'])];
+    end
+else
+    if ~cost_x_static
+        code = [code, sprintf([o.indent.generic o.indent.generic 'cost_x( x + ii*%d, u + (ii+1)*%d, Qx);' '\n'],nx,nu)];
+    end
+end
+
+if o.contractive
+    code = [code, sprintf([o.indent.generic o.indent.generic 'index = ind - ii - 1;' '\n'])];
+    
+    code = [code, sprintf([o.indent.generic o.indent.generic 'if ( index >= 0){' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'if (index > 0){' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'product_contr_nx(mem_tmp_contr, Px_contr, F);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'copy_nx(Px_contr,mem_tmp_contr);' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic '}' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'product_contr_nu(&dot_psi_N[ii*%d], Px_contr, G);' '\n'...
+        o.indent.generic o.indent.generic '}' '\n'], nu)];
+    code = [code, sprintf([o.indent.generic o.indent.generic 'else' '\n',...
+        o.indent.generic o.indent.generic o.indent.generic 'set_zero_nu(&dot_psi_N[ii*%d]);' '\n\n'],nu)];
+    
+end
+
+code = [code, sprintf([o.indent.generic o.indent.generic 'product_and_sum_nx(mem_tmp2, Px, ' data_cost_x ', F);' '\n',...
+    o.indent.generic o.indent.generic 'copy_nx(Px,mem_tmp2);' '\n',...
+    o.indent.generic o.indent.generic 'product_and_sum_nu(dot_J + ii*%d, Px, ' data_cost_u ', G);' '\n',...
+    o.indent.generic '}' '\n',...
+    '}' '\n\n'],nu)];
+info.flops.it.mul = info.flops.it.mul+ 1*(N-1);
+
+
+
 end
