@@ -594,8 +594,8 @@ if o.variable_stepSize.active
             o.variable_stepSize.alpha_max = get_step_size('quadratic',o.variable_stepSize.steady_state_state,...
                 o.variable_stepSize.steady_state_input,o);
             if isinf(o.variable_stepSize.alpha_max)
-                error(['the ''variable_stepSize.alpha_max'' cannot be found, for constant step_size ' ...
-                  'set the option variable_stepSize.active = ''false'' and use ''variable_stepSize.alpha_max'' for the value of alpha']);
+                error(['error while computing ''variable_stepSize.alpha_max'', consider to manually specify the value of alpha with' ...
+                  '''variable_stepSize.alpha_max''']);
             end
         else
             error(['if option variable_stepSize.active = ''true'' and option gradients ~= ''casadi'', then the option ''variable_stepSize.alpha_max'' must be specified. ' ...
@@ -4286,6 +4286,7 @@ if isfield(o.objective,'nonlinear')
     if isfield(o.objective,'nonlinearN')
         J = J + o.objective.nonlinearN(psi(end,:)');
     end
+else
     for k = 1:o.N-1
         J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
     end

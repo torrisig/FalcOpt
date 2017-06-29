@@ -28,7 +28,6 @@ switch gradients
         % use of internally defined and variable step size alpha (default)
         
         variable_stepSize.active = true;
-        variable_stepSize.alpha_max = 5;
       
         info = falcopt.generateCode(dynamics,par.N,par.nx,par.nu, J,...
             'variable_stepSize',variable_stepSize,...
