@@ -144,13 +144,9 @@ p.addRequired('dynamics', @(x)isa(x,'function_handle'));
 p.addRequired('N', @isnumeric); % prediction horizon
 p.addRequired('nx', @isnumeric); % state dimension
 p.addRequired('nu', @isnumeric); % input dimension
-% p.addRequired('Q', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the state (cost)
-% p.addRequired('P', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the terminal state (cost)
-% p.addRequired('R', @(x) (isnumeric(x) && min(eig(x))>= 0)); % weight on the input (cost)
 p.addRequired('objective',@isstruct);
 p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x))); % number of nonlinear constraints (per stage)
 p.addParameter('nw', 0, @(x) (isnumeric(x) && x>=0)); % known disturbance dimension
-% p.addParameter('trackReference',false,@islogical);
 p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
 p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
 p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
@@ -498,14 +494,6 @@ for i=1:length(indentTypes)
 end
 
 
-
-%     if (o.contractive || o.terminal)
-%         %sum(o.nc) = o.N*o.nc + 1;
-%         o.nc(end+1) = 1;
-%     else
-%         o.nc(end+1) = 0;
-%     end
-
 % Types
 switch o.precision
     case 'double'
@@ -529,17 +517,17 @@ if isfield(o.variable_stepSize,'active')
         error('''variable_stepSize.active'' must be boolean');
     end
 else
+    % default option for variable_stepSize
     o.variable_stepSize.active = true;
-%     if ~isfield(o.variable_stepSize,'alpha_max')
-%         o.variable_stepSize.alpha_max = 0.4;
-%     end
 end
 if o.variable_stepSize.active
+    % check all paramters
     if isfield(o.variable_stepSize,'steady_state_state')
         if any(size(o.variable_stepSize.steady_state_state)~=[o.nx,1])&& any(size(o.variable_stepSize.steady_state_state)~=[1,o.nx])
             error('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx);
         end
     else
+        % default value .steady_state_state
         o.variable_stepSize.steady_state_state = zeros(o.nx,1);
     end
     if isfield(o.variable_stepSize,'steady_state_input')
@@ -549,6 +537,7 @@ if o.variable_stepSize.active
             end
         end
     else
+        % default value .steady_state_input
         o.variable_stepSize.steady_state_input = zeros(o.N,o.nu);
     end
     if isfield(o.variable_stepSize,'decrease_coeff')
@@ -559,6 +548,7 @@ if o.variable_stepSize.active
             error('''variable_stepSize.decrease_coeff'' must be smaller than 1');
         end
     else
+        % default value .decrease_coeff
         o.variable_stepSize.decrease_coeff = 0.75;
     end
     if isfield(o.variable_stepSize,'increase_coeff')
@@ -569,6 +559,7 @@ if o.variable_stepSize.active
             error('''variable_stepSize.increase_coeff'' must be larger than 1');
         end
     else
+        % default value .increase_coeff
         o.variable_stepSize.increase_coeff = 1/o.variable_stepSize.decrease_coeff;
     end
     if isfield(o.variable_stepSize,'increase_threshold')
@@ -576,6 +567,7 @@ if o.variable_stepSize.active
             error('''variable_stepSize.increase_threshold'' must be numeric');
         end
     else
+        % default value .increase_threshold
         o.variable_stepSize.increase_threshold = 0.75;
     end
     if isfield(o.variable_stepSize,'decrease_threshold')
@@ -583,6 +575,7 @@ if o.variable_stepSize.active
             error('''variable_stepSize.decrease_threshold'' must be numeric');
         end
     else
+        % default value .decrease_threshold
         o.variable_stepSize.decrease_threshold = 0.25;
     end
     if isfield(o.variable_stepSize,'alpha_max')
@@ -591,8 +584,10 @@ if o.variable_stepSize.active
         end
     else
         if strcmp(o.gradients,'casadi')
-            o.variable_stepSize.alpha_max = get_step_size('quadratic',o.variable_stepSize.steady_state_state,...
-                o.variable_stepSize.steady_state_input,o);
+            % automatically compute .alpha_max
+            o.variable_stepSize.alpha_max = get_step_size(o.variable_stepSize.steady_state_state,...
+                                                            o.variable_stepSize.steady_state_input,o);
+            % check value of computed .alpha_max                                            
             if isinf(o.variable_stepSize.alpha_max)
                 error(['error while computing ''variable_stepSize.alpha_max'', consider to manually specify the value of alpha with' ...
                   '''variable_stepSize.alpha_max''']);
@@ -607,12 +602,14 @@ if o.variable_stepSize.active
             error('''variable_stepSize.alpha_min'' must be numeric');
         end
     else
+        % default value .alpha_min 
         o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
     end
 else
     if isfield(o.variable_stepSize, 'alpha_max')
         o.stepSize = o.variable_stepSize.alpha_max;
     else
+        % default value .alpha_max in case of constant step size
         o.variable_stepSize.alpha_max = 0.4;
     end
 end
@@ -759,10 +756,7 @@ switch o.gradients
         data = [data, d];
         o.nc = i.nc;
         for jj=1:length(o.K_n)
-            %             o.Jac_g_struct = i.in_Dg_g.struct.structure.stored.mat;           % structure of Dg
             o.Jac_n_struct{jj} = i.in_Dn_n{jj}.struct.structure.stored.mat;     % structure of Dn
-            %             o.Jac_g_static = i.in_Dg_g.static;
-            % structure of constraints
             info.flops.once.casadi = info.flops.once.casadi + i.in_n{jj}.flops*length(o.K_n{jj});     % flops build_n
             info.flops.ls.casadi = info.flops.ls.casadi + i.in_n{jj}.flops*length(o.K_n{jj});         % flops build_n
             info.flops.it.casadi = info.flops.it.casadi + i.in_Dn_n{jj}.flops*length(o.K_n{jj});      % flops build_Dn
@@ -779,8 +773,6 @@ switch o.gradients
         code = [code, c];
         data = [data, d];
         
-        %o.Jac_g_struct = i.in_Dg_g.struct.structure.mat;        % structure of Dg
-        %o.Jac_g_static = i.in_Dg_g.static;
         o.nc = i.nc;
         
         for jj=1:length(o.K_n)
@@ -1553,13 +1545,14 @@ if o.compile
     eval(compile);
 end
 
-% generate simulink DEBUG
+% generate simulink
 if o.simulink
     simulink_fcn = falcopt.generateSFunction(o.nx,o.nu,o.nw,o.N, 'maxIt',o.maxIt,...
                             'name',sprintf(['simulink_' o.name]), 'trackReference',o.objective.trackReference,...
                             'terminal',o.terminal, 'contractive',o.contractive, ...
                             'indent',o.indent.generic, 'precision',o.precision, ...
-                            'type', o.real, 'debug', o.debug);
+                            'type', o.real, 'debug', o.debug, ...
+                            'maskImage_name','+falcopt\simulinkMask_logo.png');
     simulink_code = [libr '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
     if ~isempty(o.gendir)
         name = sprintf([o.gendir '/simulink_' o.name '.c']);
@@ -1655,17 +1648,17 @@ else
     if( nargin(f) == 3)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n'])];
     elseif( nargin(f) == 2)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n'])];
     elseif( nargin(f) == 1)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\n'])];
     end
     
@@ -1726,19 +1719,19 @@ for k = 1:length(p.Results.jac)
         if( nargin(f) == 3)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 2)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],3,0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 1)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],1,0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
@@ -4227,9 +4220,10 @@ code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'm = ' o.
 info.flops.comp = sum(o.nc);
 end
 
-function alpha_opt = get_step_size(cost,x0,u_ref,o)
-% this function works with casaDi tool
+function alpha_opt = get_step_size(x0,u_ref,o)
+% this function works only with CasADi tool
 
+% check dimensions inputs
 if all(size(u_ref) == [o.nu,1])
     u_ref = repmat(u_ref',o.N,1);
 elseif all(size(u_ref) == [1,o.nu])
@@ -4259,7 +4253,7 @@ else
     dynamics = Function('y_fun',{x,u},{o.dynamics(x,u)});
 end
 
-% define psi
+% define psi as function of x0 and u
 if o.nw > 0
     for i=1:o.N
         if i==1
@@ -4278,7 +4272,7 @@ else
     end
 end
 
-% define J
+% define cost J
 if isfield(o.objective,'nonlinear')
     for k = 1:o.N-1
         J = J + o.objective.nonlinear(psi(k,:)',u_n(k,:)');
@@ -4294,7 +4288,12 @@ else
 end
 
 % compute Hessian
-HJ = hessian(J,u_n);
+try 
+    HJ = hessian(J,u_n);
+catch
+    error(['error while computing variable_stepSize.alpha_max, consider to set '...
+           'manualy a value for it']);
+end
 
 % find alpha max
 if o.nw > 0
@@ -4339,6 +4338,7 @@ info.flops.it = falcopt.internal.addFlops(info.flops.it,in.flops); % flops produ
 
 
 if trackRef
+    % generate diffX / diffU
     [c, d, in] = generate_diffXU(o);
     code = [code, c];
     data = [data, d];
@@ -4446,7 +4446,7 @@ switch o.gradients
                'objective.R and objective.P instead.']);
 end
 
-%% det_J
+%% generate det_J
 
 code = [code, sprintf([o.inline ' void det_J(const ' o.real '* x0, const ' o.real ...
     '* u, const ' o.real '* x' c_tr_dec ', ' ...
@@ -4518,7 +4518,7 @@ else
 end
 code = [code, sprintf(['}' '\n\n'])];
 
-%% det_J_and_dot_J
+%% generate det_J_and_dot_J
 
 code = [code, sprintf([o.inline ' void det_J_and_dot_J(const ' o.real '* x0, const ' o.real ...
     '* u, const ' o.real '* x' c_w_dec c_tr_dec ', ' ...
