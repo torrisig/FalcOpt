@@ -17,6 +17,7 @@ function code = generateSFunction(varargin)
 %                                        Default: 'proposed_algorithm'
 %           model_name                 - name of the generated Simulink block
 %                                        Default: 'FalcOpt_lib'
+%           maskImage_name             - name of the simulink mask image
 %           extra_output               - if true add output ports for cost
 %                                        value and number of iterations. Default: false
 %           maxIt                      - max number of iterations. Default: 0
@@ -57,6 +58,7 @@ p.addParameter('maxIt', 0, @(x)(isnumeric(x) && x>=0 && mod(x,1)==0));
 p.addParameter('name','simulink_my_code', @ischar);
 p.addParameter('function_name','proposed_algorithm', @ischar);
 p.addParameter('model_name','FalcOpt_lib', @ischar);
+p.addParameter('maskImage_name','mask_image',@ischar);
 p.addParameter('trackReference',false, @islogical);
 p.addParameter('terminal',false, @islogical);
 p.addParameter('contractive',false, @islogical);
@@ -377,7 +379,7 @@ set_param( block_name,'Mask','on');
 % create Mask
 mask = [];
 % image Mask
-ud.logo = imread('Simulink_icon.png');
+ud.logo = imread(o.maskImage_name);
 [h_im,w_im,~] = size(ud.logo);
 set_param(gcb,'position',[5,5,w_im,h_im]);
 set_param(gcb,'UserDataPersistent','on');
