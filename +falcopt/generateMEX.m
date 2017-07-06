@@ -155,7 +155,7 @@ function code = generateMEX(varargin)
                            options.indent.code ' * MEX Function *' '\n' ...
                            options.indent.code ' ****************/' '\n'])];
     % Generate conversion functions
-    if strcmp(options.type, 'single')
+    if strcmp(options.type, 'float')
         % from MATLAB (convert to single)
         code = [code, sprintf(['\n' ...
                                options.indent.code 'static ' options.inline ' void ' options.names.mex '_fromMATLAB(const double* v, ' dataType '* vt, unsigned int n) {' '\n'])];
@@ -196,7 +196,7 @@ function code = generateMEX(varargin)
                            options.indent.code  'void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {' '\n'])];
     % Define variables
     index = 0;
-    if strcmp(options.type, 'single')
+    if strcmp(options.type, 'float')
         code = [code, sprintf([options.indent.code options.indent.generic dataType ' x0[%i];' '\n'], dims.x)];
         if dims.w > 0
             index = index+1;
@@ -227,7 +227,7 @@ function code = generateMEX(varargin)
     end
     if options.terminalContraction
         index = index+1;
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic dataType ' contraction_c = (' dataType ')(*mxGetPr(prhs[' num2str(index) ']);' '\n'])];
         else
             code = [code, sprintf([options.indent.code options.indent.generic dataType ' contraction_c = *mxGetPr(prhs[' num2str(index) ']);' '\n'])];
@@ -283,7 +283,7 @@ function code = generateMEX(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic 'if(!mxIsDouble(prhs[' num2str(index) ']) || mxIsComplex(prhs[' num2str(index) ']) || mxGetN(prhs[' num2str(index) ']) != 1 || mxGetM(prhs[' num2str(index) ']) != %i) {' '\n' ... 
                                options.indent.code options.indent.generic options.indent.generic 'mexErrMsgIdAndTxt("' options.names.mex ':InvalidDimension", "Initial state x0 has invalid dimension. Needs to be a column vector of size %i."); }' '\n'], dims.x, dims.x)];
     end
-    if strcmp(options.type, 'single')
+    if strcmp(options.type, 'float')
         code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_fromMATLAB(mxGetPr(prhs[' num2str(index) ']), x0, %i);' '\n'], dims.x)];
     end
     % Disturbance
@@ -293,7 +293,7 @@ function code = generateMEX(varargin)
             code = [code, sprintf([options.indent.code options.indent.generic 'if(!mxIsDouble(prhs[' num2str(index) ']) || mxIsComplex(prhs[' num2str(index) ']) || mxGetN(prhs[' num2str(index) ']) != 1 || mxGetM(prhs[' num2str(index) ']) != %i) {' '\n' ... 
                                    options.indent.code options.indent.generic options.indent.generic 'mexErrMsgIdAndTxt("' options.names.mex ':InvalidDimension", "Disturbance vector w has invalid dimension. Needs to be a column vector of size %i*%i."); }' '\n'], N*dims.w, N, dims.w)];
         end
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_fromMATLAB(mxGetPr(prhs[' num2str(index) ']), w, %i);' '\n'], N*dims.w)];
         end
     end
@@ -305,7 +305,7 @@ function code = generateMEX(varargin)
             code = [code, sprintf([options.indent.code options.indent.generic 'if(!mxIsDouble(prhs[' num2str(index) ']) || mxIsComplex(prhs[' num2str(index) ']) || mxGetN(prhs[' num2str(index) ']) != 1 || mxGetM(prhs[' num2str(index) ']) != %i) {' '\n' ... 
                                    options.indent.code options.indent.generic options.indent.generic 'mexErrMsgIdAndTxt("' options.names.mex ':InvalidDimension", "State reference vector xref has invalid dimension. Needs to be a column vector of size %i*%i."); }' '\n'], N*dims.x, N, dims.x)];
         end
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_fromMATLAB(mxGetPr(prhs[' num2str(index) ']), xref, %i);' '\n'], N*dims.x)];
         end
         % References (input)
@@ -314,7 +314,7 @@ function code = generateMEX(varargin)
             code = [code, sprintf([options.indent.code options.indent.generic 'if(!mxIsDouble(prhs[' num2str(index) ']) || mxIsComplex(prhs[' num2str(index) ']) || mxGetN(prhs[' num2str(index) ']) != 1 || mxGetM(prhs[' num2str(index) ']) != %i) {' '\n' ... 
                                    options.indent.code options.indent.generic options.indent.generic 'mexErrMsgIdAndTxt("' options.names.mex ':InvalidDimension", "Input reference vector uref has invalid dimension. Needs to be a column vector of size %i*%i."); }' '\n'], N*dims.u, N, dims.u)];
         end
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_fromMATLAB(mxGetPr(prhs[' num2str(index) ']), uref, %i);' '\n'], N*dims.u)];
         end
     end
@@ -341,7 +341,7 @@ function code = generateMEX(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic 'if(!mxIsDouble(prhs[' num2str(index) ']) || mxIsComplex(prhs[' num2str(index) ']) || mxGetN(prhs[' num2str(index) ']) != 1 || mxGetM(prhs[' num2str(index) ']) != %i) {' '\n' ... 
                                options.indent.code options.indent.generic options.indent.generic options.indent.generic 'mexErrMsgIdAndTxt("' options.names.mex ':InvalidDimension", "Warmstart vector uinit has invalid dimension. Needs to be a column vector of size %i*%i."); }' '\n'], N*dims.u, N, dims.u)];
     end
-    if strcmp(options.type, 'single')
+    if strcmp(options.type, 'float')
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic options.names.mex '_fromMATLAB(mxGetPr(prhs[' num2str(index) ']), u, %i);' '\n'], N*dims.u)];
     else
         code = [code, sprintf([options.indent.code options.indent.generic options.indent.generic options.names.mex '_copy(mxGetPr(prhs[' num2str(index) ']), u, %i);' '\n'], N*dims.u)];
@@ -405,7 +405,7 @@ function code = generateMEX(varargin)
     code = [code, sprintf(['\n' ...
                            options.indent.code options.indent.generic '/* Process outputs */' '\n'])];
     code = [code, sprintf([options.indent.code options.indent.generic 'plhs[0] = mxCreateDoubleMatrix(%i,1,mxREAL);' '\n'], dims.u)];
-    if strcmp(options.type, 'single')
+    if strcmp(options.type, 'float')
         code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(u, mxGetPr(plhs[0]), %i);' '\n'], dims.u)];
     else
         code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_copy(u, mxGetPr(plhs[0]), %i);' '\n'], dims.u)];
@@ -415,7 +415,7 @@ function code = generateMEX(varargin)
         code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(lineSearch_nit, mxGetPr(lineSearch_nitOut), %i);' '\n'], options.maxIt)];
     end
     if options.debug > 1
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(x, mxGetPr(xOut), %i);' '\n'], N*dims.x)];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(fval, mxGetPr(fvalOut), 1);' '\n'])];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(u, mxGetPr(uOut), %i);' '\n'], N*dims.u)];
@@ -426,7 +426,7 @@ function code = generateMEX(varargin)
         end
     end
     if options.debug > 2
-        if strcmp(options.type, 'single')
+        if strcmp(options.type, 'float')
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(optimval, mxGetPr(optimvalOut), 1);' '\n'])];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(feasval, mxGetPr(feasvalOut), 1);' '\n'])];
             code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_toMATLAB(meritval, mxGetPr(meritvalOut), 1);' '\n'])];
