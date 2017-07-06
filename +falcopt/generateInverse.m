@@ -22,7 +22,9 @@
 %                'ordered' for ommitted zero and reccurring elements including permutation of elements (elements of M are stored in ascending order of their values)
 %                'indexed' for ommitted zero and recurring elements including permutation of element (elements of M are stored according to their values as indices starting from 1)
 %               M and Mi can be treated differently if it is a struct e.g. struct('M', 'dense', 'Mi' 'sparse').
-%  .types     - A string or struct. If a string then it indicates the data type, either 'single' or 'double',
+%  .precision - A string that determines the precision of computation and stored data in the generated code. 
+%                Needs to be either 'single' or 'double'. Default: '' (unspecified, will try to extract from type);
+%  .types     - A string or struct. If a string then it indicates the data type, either 'float' or 'double',
 %                if a struct it also indicates the function type. Default is struct('fun', 'static inline void', 'data', 'double')
 %  .symmetric - A boolean, if true then M is considered symmetric and code is generate to exploit this. Default: false.
 %  .transpose - A boolean, if true then M is transposed before being inverted. Default: false.
@@ -129,8 +131,9 @@ function [code, info] = generateInverse(varargin)
     if ~isfield(options.types, 'fun')
         options.types.fun = ['static ' options.inline ' void'];
     end
-    if strcmp(options.types.data, 'float')
-        options.types.data = 'single';
+    if strcmp(options.types.data, 'single')
+        warning('falcopt:generateInverse:InvalidType', 'The type "single" is depricated and will not be allowed in a future version.');
+        options.types.data = 'float';
     end
     % Precision (due to legacy usage)
     if isempty(options.precision)
