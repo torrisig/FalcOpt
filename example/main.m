@@ -87,9 +87,32 @@ for ii = 1:n_steps
     [~, flag, info] = Motor_example_FalcOpt(state(:,ii),xref,uref,U_pred);
     
     
-    if flag < 0
-        disp('Some problem in the solver')
-        keyboard
+    if flag <= 0
+        switch flag
+            case 0
+                if ~isfield(info, 'iterations')
+                    warnStr = 'Maximum number of iterations reached. May not be a problem (set ''debug'' to 3 in generateMotor() for more detailed diagnostics). Continuing... ';
+                elseif ~isfield(info, 'optimval')
+                    warnStr = ['Maximum number of iterations reached with ' num2str(info.iterations) '. May not be a problem (set ''debug'' to 3 in generateMotor() for more detailed diagnostics). Continuing... '];
+                else
+                    warnStr = ['Maximum number of iterations reached with ' num2str(info.iterations) '. Optimality tolerance ' num2str(info.optimval) ', feasibility tolerance ' num2str(info.feasval) '. Continuing... '];
+                end
+                warning('falcopt:example:maximumIterations', warnStr);
+            case -1
+                if ~isfield(info, 'optimval')
+                    warnStr = 'Line-search failed to progress. Close to solution, may not be a problem (set ''debug'' to 3 in generateMotor() for more detailed diagnostics). Continuing... ';
+                else
+                    warnStr = ['Line-search failed to progress. Close to solution, may not be a problem: optimality tolerance ' num2str(info.optimval) ', feasibility tolerance ' num2str(info.feasval) '. Continuing... '];
+                end
+                warning('falcopt:example:closeToSolution', warnStr);
+            case -10
+                if ~isfield(info, 'optimval')
+                    warnStr = 'Line-search failed to progress (set ''debug'' to 3 in generateMotor() for more detailed diagnostics). Continuing... ';
+                else
+                    warnStr = ['Line-search failed to progress: optimality tolerance ' num2str(info.optimval) ', feasibility tolerance ' num2str(info.feasval) '. Continuing... '];
+                end
+                warning('falcopt:example:lineSearchFailed', warnStr);
+        end
     end
     
     % get input
