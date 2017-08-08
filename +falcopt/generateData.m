@@ -188,12 +188,12 @@ function [data, code, info] = generateData(varargin)
         info.ones.sign = sign(M((c-1)*dims.n+r));
         if ~options.transpose
             info.ones.mat((c-1)*dims.n+r) = info.ones.sign;
-            info.ones.rows = r;
-            info.ones.cols = c;
+            info.ones.rows = r(:)';
+            info.ones.cols = c(:)';
         else
             info.ones.mat((r-1)*dims.m+c) = info.ones.sign;
-            info.ones.rows = c;
-            info.ones.cols = r;
+            info.ones.rows = c(:)';
+            info.ones.cols = r(:)';
         end
         M(abs(M) == 1) = 0; % Set to zero, to be ignored
     else
