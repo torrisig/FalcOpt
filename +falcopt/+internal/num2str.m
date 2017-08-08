@@ -57,15 +57,15 @@ function s = num2str(varargin)
                 nDigits = 9;
         end
          % Determine number of needed digits
-        dstr = num2str(num*10^(nDigits-fix(log10(num))), nDigits+1);
+        dstr = num2str(abs(num)*10^(nDigits-fix(log10(abs(num)))), nDigits+1);
         d = regexp(dstr(1:end-1), '([0]+)$', 'start');
         if isempty(d)
             d = nDigits;
         else
             d = max(d-1, 1); % Max only has an effect if num = 0
         end
-        if d <= minDigits && fix(log10(num)) <= minDigits && fix(log10(num)) > 0
-           d = d+1;
+        if d <= minDigits && fix(log10(abs(num))) <= minDigits && fix(log10(abs(num))) > 0
+           d = d+fix(log10(abs(num)));
         end
         s = sprintf(['%0.' num2str(d) 'g'], num);
         if isempty(strfind(s, '.'))
