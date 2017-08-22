@@ -1659,7 +1659,7 @@ else
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)];
         code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
-        code = [code, sprintf(['\tin[0] = x;\n\n'])];
+        code = [code, sprintf('\tin[0] = x;\n\n')];
     end
     
     code = [code, sprintf([o.indent.generic  fName '_casadi( in, &xp, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n'])];
