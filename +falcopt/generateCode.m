@@ -2131,7 +2131,7 @@ end
 % generate a selector that chooses which a - u to use
 code = [code, sprintf(['\n' o.indent.code o.inline 'void build_amu(const ' o.real '* u, const unsigned int k, ' o.real '* amu){' '\n\n'])];
 for ii=1:length(o.K_amu)
-    code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_amu{ii}-1, 'k') ') {' '\n'])]; %#ok
+    code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_amu{ii}-1, 'k') ') {' '\n'])]; %#ok
     code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_amu_' num2str(ii) '(&amu[0], &u[0]);' '\n'])]; %#ok
     code = [code, sprintf([o.indent.code o.indent.generic '}' '\n'])]; %#ok
 end
@@ -2161,7 +2161,7 @@ end
 % generate a selector that chooses which u - b to use
 code = [code, sprintf(['\n' o.indent.code o.inline 'void build_umb(const ' o.real '* u, const unsigned int k, ' o.real '* umb){' '\n\n'])];
 for ii=1:length(o.K_umb)
-    code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_umb{ii}-1, 'k') ') {' '\n'])]; %#ok
+    code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_umb{ii}-1, 'k') ') {' '\n'])]; %#ok
     code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_umb_' num2str(ii) '(&umb[0], &u[0]);' '\n'])]; %#ok
     code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
 end
@@ -2302,7 +2302,7 @@ if( nl_con)
     % generate a selector that chooses which n to use
     code = [code, sprintf(['\n' o.indent.code 'void build_n(const ' o.real '* u, const unsigned int k, ' o.real '* n){' '\n\n'])];
     for ii=1:length(o.K_n)
-        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_n{ii}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_n{ii}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_n_' num2str(ii) '(&u[0], &n[0]);' '\n'])]; %#ok
         code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -2311,7 +2311,7 @@ if( nl_con)
     % generate a selector that chooses which Dn to use
     code = [code, sprintf(['\n' o.indent.code 'void build_Dn(const ' o.real '* u, const unsigned int k, ' o.real '* Dn){' '\n\n'])];
     for ii=1:length(o.K_n)
-        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_n{ii}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_n{ii}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'build_Dn_' num2str(ii) '(&u[0], &Dn[0]);' '\n'])]; %#ok
         code = [code, sprintf([o.indent.code o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -3195,7 +3195,7 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void build_vNnc_lb(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_lb{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_lb{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         if o.variable_stepSize.active
             code = [code, sprintf([o.indent.generic o.indent.generic 'build_vNnc_lb_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)];%#ok
         else
@@ -3236,7 +3236,7 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void build_vNnc_ub(const ' o.real '* gps, '...
         'const ' o.real '* dot_J, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_ub)
-        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_ub{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.code o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_ub{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         if o.variable_stepSize.active
             code = [code, sprintf([o.indent.generic o.indent.generic 'build_vNnc_ub_%i(&res[0], &gps[0], &dot_J[0], &alpha_inverse);' '\n'],jj)]; %#ok
         else
@@ -3287,7 +3287,7 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void Dntop_times_dotJ_n(const ' o.real '* Dn, '...
         'const ' o.real '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.generic o.indent.generic 'Dntop_times_dotJ_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -3296,7 +3296,7 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void build_vNnc_n(const ' o.real '* gps, '...
         'const ' o.real '* temp_n, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         if o.variable_stepSize.active
             code = [code, sprintf([o.indent.generic o.indent.generic 'build_vNnc_n_%i(&res[0], &gps[0], &temp_n[0], &alpha_inverse);' '\n'],jj)];%#ok
         else
@@ -3343,7 +3343,7 @@ if ~isempty(o.K_lb)
     code = [code, sprintf([ o.inline ' void minus_Ina_muG(const ' o.real '* muG, '...
         'const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_lb)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_lb{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_lb{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.generic o.indent.generic 'minus_Ina_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -3368,7 +3368,7 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([ o.inline ' void Inb_muG(const ' o.real '* muG, '...
         'const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_ub)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_ub{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_ub{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.generic o.indent.generic 'Inb_muG_%i(&res[0], &muG[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -3395,7 +3395,7 @@ if ~isempty(o.K_n)
     code = [code, sprintf([ o.inline ' void Dn_times_muG_n(const ' o.real '* Dn, '...
         'const ' o.real '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj=1:length(o.K_n)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_n{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.generic o.indent.generic 'Dn_times_muG_%i(&res[0], &x[0], &Dn[0]);' '\n'],jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
@@ -3461,7 +3461,7 @@ if ~isempty(o.K_nc)
     code = [code, sprintf([o.inline ' void minus_scale_nc(const ' o.real ...
         '* x, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj = 1:length(o.K_nc)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_nc{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_nc{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         if o.variable_stepSize.active
             code = [code, sprintf([o.indent.generic o.indent.generic 'minus_scale_nc_%i( &res[0], &x[0], &minus_alpha);' '\n'], jj)];%#ok
         else
@@ -3474,7 +3474,7 @@ if ~isempty(o.K_nc)
     code = [code, sprintf([o.inline ' void product_matlab_nc(const ' o.real ...
         '* x, const ' o.real '* y, const unsigned int k, ' o.real '* res){' '\n'])];
     for jj = 1:length(o.K_nc)
-        code = [code, sprintf([o.indent.generic 'if(' falcopt.generateRangeCheck(o.K_nc{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
+        code = [code, sprintf([o.indent.generic 'if(' falcopt.internal.generateRangeCheck(o.K_nc{jj}-1, 'k', 'precision', 'unsigned integer') ') {' '\n'])]; %#ok
         code = [code, sprintf([o.indent.generic o.indent.generic 'product_matlab_nc_%i(&x[0], &y[0], &res[0]);' '\n'], jj)]; %#ok
         code = [code, sprintf([o.indent.generic  '}' '\n'])]; %#ok
     end
