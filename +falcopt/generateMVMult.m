@@ -387,7 +387,11 @@ function [data, code, info] = generateMVMult(varargin)
         options.types.data = 'double';
     end
     if ~isfield(options.types, 'fun')
-        options.types.fun = ['static ' options.inline ' void'];
+        options.types.fun = 'static ';
+        if ~isempty(options.inline)
+            options.types.fun = [options.types.fun options.inline ' '];
+        end
+        options.types.fun = [options.types.fun 'void'];
     end
     
     % Precision (due to legacy usage)
@@ -710,6 +714,10 @@ function [data, code, info] = generateMVMult(varargin)
         end
         if any(options.transpose & ~options.static.M)
             fprintf(f, [options.indent.code 'static ' options.inline ' void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
+            if ~isempty(options.inline)
+                fprintf(f, [options.inline ' ']);
+            end
+            fprintf(f, ['void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'unsigned int i,j;' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'for(i=0; i<m; i++) { /* iterate over columns */' '\n']);
             fprintf(f, [options.indent.code options.indent.generic options.indent.generic 'for(j=0; j<n; j++) { Mt[j*m+i] = M[i*n+j]; }' '\n']);
