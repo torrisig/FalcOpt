@@ -7,7 +7,7 @@ function generateMotor(par)
 
     contractive = false;        % no constractive constraints
     terminal = false;             % no terminal constraints
-    gradients = 'casadi';
+    gradients = 'matlab';
     precision = 'single';
 
     %% Dynamics of the system
@@ -35,7 +35,7 @@ function generateMotor(par)
                 'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
                 'contractive',contractive, 'terminal', terminal, ...
                 'debug',debug,'merit_function', merit_function,...
-                'eps',eps,'precision', precision,...
+                'eps',eps,'precision', precision, ...
                 'name', 'Motor_example_FalcOpt', 'gendir', 'generatedCode');
         case 'matlab'
             % second option: Automatic differentiation via Matlab symbolic toolbox
