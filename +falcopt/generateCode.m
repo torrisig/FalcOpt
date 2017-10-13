@@ -1455,7 +1455,7 @@ if o.debug >2
     if o.variable_stepSize.active 
         optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
     else 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))* ' falcopt.internal.num2str(1/o.stepPM) '; \n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))* ' falcopt.internal.num2str(1/o.variable_stepSize.alpha_max) '; \n'])];
     end
     optCode = [optCode, sprintf([o.indent.generic '(*feasval) = constr_viol; ' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic '(*meritval) = phi0_dot; ' '\n'])];
@@ -2033,9 +2033,9 @@ for k = 1:2
         data = [data, sprintf(['\tstatic ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
         code = [ code, sprintf(['/* ' J_name '*/\n'])]; %#ok
         if( o.nw > 0)
-            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+            code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         else
-            code = [code, sprintf(['static inline void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+            code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
         end
         code = [code, d, sprintf(['}\n\n'])]; %#ok
     end
