@@ -8,7 +8,7 @@ function generateMotor(par)
     contractive = false;        % no constractive constraints
     terminal = false;             % no terminal constraints
     gradients = 'matlab';
-    precision = 'single';
+    precision = 'double';
 
     %% Dynamics of the system
     dynamics = @(x,u) model_upd(x,u,par.Ts);
