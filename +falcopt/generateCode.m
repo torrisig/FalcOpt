@@ -239,7 +239,7 @@ end
 if isfield( o.objective,'nonlinear')
     if isa(o.objective.nonlinear,'function_handle')
         if nargin(o.objective.nonlinear)~=2
-            error('cherck paramters of objective.nonlinear function. Must be (x,u)')
+            error('check paramters of objective.nonlinear function. Must be (x,u)')
         end
     else
         error('objective.nonlinear field must be a function handle')
@@ -248,7 +248,7 @@ end
 if isfield( o.objective,'nonlinearN')
     if isa(o.objective.nonlinearN,'function_handle')
         if nargin(o.objective.nonlinearN)~=1
-            error('cherck paramters of objective.nonlinearN function. Must be (x)')
+            error('check paramters of objective.nonlinearN function. Must be (x)')
         end
     else
         error('objective.nonlinearN field must be a function handle')
