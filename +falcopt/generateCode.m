@@ -1455,7 +1455,7 @@ if o.debug >2
     if o.variable_stepSize.active 
         optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
     else 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))* ' falcopt.internal.num2str(1/o.stepPM) '; \n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))* ' falcopt.internal.num2str(1/o.variable_stepSize.alpha_max) '; \n'])];
     end
     optCode = [optCode, sprintf([o.indent.generic '(*feasval) = constr_viol; ' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic '(*meritval) = phi0_dot; ' '\n'])];
