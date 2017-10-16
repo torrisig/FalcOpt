@@ -128,7 +128,7 @@ function code = generateMEX(varargin)
     
     %% Generate code
     if options.verbose == 1
-        fprintf(['Generating code for ' names.mex '()\n']);
+        fprintf(['Generating code for ' options.names.mex '()\n']);
     end
     
     code = '';
