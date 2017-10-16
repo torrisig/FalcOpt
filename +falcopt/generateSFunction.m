@@ -49,6 +49,8 @@ function code = generateSFunction(varargin)
 % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 % SOFTWARE.
 %
+defaultNames = struct('maximumIterations', 'maximumIterations');
+
 p = inputParser;
 p.addRequired('nx', @isnumeric);
 p.addRequired('nu', @isnumeric);
@@ -56,6 +58,7 @@ p.addRequired('nw', @isnumeric);
 p.addRequired('N', @isnumeric);
 p.addParameter('maxIt', 0, @(x)(isnumeric(x) && x>=0 && mod(x,1)==0));
 p.addParameter('name','simulink_my_code', @ischar);
+p.addParameter('names', defaultNames, @isstruct);
 p.addParameter('function_name','proposed_algorithm', @ischar);
 p.addParameter('model_name','FalcOpt_lib', @ischar);
 p.addParameter('maskImage_name','mask_image',@ischar);
@@ -74,6 +77,14 @@ code = [];
 s_name = o.name; % name of .c file
 function_name = o.function_name;   % name of function called inside wrapper
 model_name = o.model_name;
+
+% Names
+fields = fieldnames(defaultNames);
+for i=1:length(fields)
+    if ~isfield(options.names, fields{i})
+        options.names.(fields{i}) = defaultNames.(fields{i});
+    end
+end
 
 % Type
 if strcmp(o.type, 'single')
@@ -229,9 +240,9 @@ end
 code = [code, sprintf(' %s *%s){\n\n',out.(out_names{end}).data_c,out.(out_names{end}).name)];
 
 code = [code, sprintf([o.indent 'int i = 0;\n'...
-                       o.indent 'unsigned int it_ls[%i];\n'...
+                       o.indent 'unsigned int it_ls[' falcopt.internal.toDefineName(options.names.maximumIterations) '];\n'...
                        o.indent real_T ' x[%i];\n'...
-                       o.indent real_T ' u[%i];\n'],o.maxIt,o.nu*o.N,o.nu*o.N)];
+                       o.indent real_T ' u[%i];\n'],o.nu*o.N,o.nu*o.N)];
 if ~o.extra_output
   code = [code, sprintf([o.indent 'double fval = 0;\n'...
                          o.indent 'unsigned int iter = 0;\n'])];  

@@ -43,7 +43,7 @@
 %
 function code = generateMEX(varargin)
     indentTypes = {'generic', 'code'};
-    defaultNames = struct('mex', 'mymex', 'fun', 'myfun');
+    defaultNames = struct('mex', 'mymex', 'fun', 'myfun', 'maximumIterations', 'maximumIterations');
     p = inputParser;
     p.CaseSensitive = true;
     p.addRequired('N', @(x)(isnumeric(x) && x > 0 && mod(x,1) == 0));
@@ -240,8 +240,8 @@ function code = generateMEX(varargin)
     code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* nitOut = mxCreateDoubleMatrix(1,1, mxREAL);' '\n'])];
     code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int nit[1];' '\n'])];
     if options.maxIt > 0
-        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* lineSearch_nitOut = mxCreateDoubleMatrix(1,%i, mxREAL);' '\n'], options.maxIt)];
-        code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int lineSearch_nit[%i];' '\n'], options.maxIt)];
+        code = [code, sprintf([options.indent.code options.indent.generic 'mxArray* lineSearch_nitOut = mxCreateDoubleMatrix(1, ' falcopt.internal.toDefineName(options.names.maximumIterations) ', mxREAL);' '\n'])];
+        code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int lineSearch_nit[' falcopt.internal.toDefineName(options.names.maximumIterations) '];' '\n'])];
     end
     if options.debug > 1
         code = [code, sprintf([options.indent.code options.indent.generic dataType ' x[%i];' '\n'], N*dims.x)];
@@ -414,7 +414,7 @@ function code = generateMEX(varargin)
     end
     code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(nit, mxGetPr(nitOut), 1);' '\n'])];
     if options.maxIt > 0      
-        code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(lineSearch_nit, mxGetPr(lineSearch_nitOut), %i);' '\n'], options.maxIt)];
+        code = [code, sprintf([options.indent.code options.indent.generic options.names.mex '_UINTtoMATLAB(lineSearch_nit, mxGetPr(lineSearch_nitOut), ' falcopt.internal.toDefineName(options.names.maximumIterations) ');' '\n'])];
     end
     if options.debug > 1
         if strcmp(options.type, 'float')

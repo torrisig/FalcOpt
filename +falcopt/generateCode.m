@@ -138,6 +138,12 @@
 % SOFTWARE.
 
 function [info] = generateCode(varargin)
+defaultNames = struct('maximumIterations', 'maximumIterations', ...
+                      'maximumLineSearchIterations', 'maximumLineSearchIterations', ...
+                      'lineSearchAlphaMax', 'lineSearchAlphaMax', ...
+                      'lineSearchAlphaMin', 'lineSearchAlphaMax', ...
+                      'KKTOptimalityTolerance', 'KKTOptimalityTolerance');
+                  
 indentTypes = {'generic', 'data', 'code'};
 p = inputParser;
 p.addRequired('dynamics', @(x)isa(x,'function_handle'));
@@ -155,9 +161,10 @@ p.addParameter('tolLs', 1e-4, @(x)(isnumeric(x) && x >= eps)); % line search min
 p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
 p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
 p.addParameter('inline', '', @ischar);
-p.addParameter('name','my_code', @ischar);
-p.addParameter('build_MEX',true, @islogical);
-p.addParameter('simulink',false, @islogical);
+p.addParameter('name', 'my_code', @ischar);
+p.addParameter('names', defaultNames, @isstruct); % Internal naming
+p.addParameter('build_MEX', true, @islogical);
+p.addParameter('simulink', false, @islogical);
 p.addParameter('compile', true, @islogical);
 p.addParameter('gendir', '', @ischar);
 p.addParameter('verbose', 0, @isnumeric);
@@ -233,6 +240,24 @@ end
 
 if (o.terminal && o.contractive)
     error('Cannot have both contractive and terminal constraint');
+end
+
+% Check names
+fields = fieldnames(defaultNames);
+for f=1:length(fields)
+    % Set defaults
+    if ~isfield(o.names, fields{f})
+        o.names.(fields{f}) = defaultNames.(fields{f});
+    end
+end
+if ~any(strcmp('prefix', fields))
+    o.names.prefix = [o.name '_'];
+end
+for f=1:length(fields)
+    % Add prefix
+    if ~strcmp(fields{1}, 'prefix')
+        o.names.(fields{f}) = [o.names.prefix o.names.(fields{f})];
+    end
 end
 
 %% check objective fields
@@ -630,6 +655,7 @@ info.header = {};
 
 %% Generating code
 libr = sprintf(['#include "math.h"' '\n']);
+defs = ''; % Defines
 code = '';
 data = '';
 optCode = '';
@@ -839,8 +865,11 @@ else
 end
 
 
-%% Declaration of variables
+%% Definitions fo parameters for main algorithm
+defs = [defs, sprintf(['/** FALCOPT parameters  **/' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.maximumIterations) ' (' falcopt.internal.num2str(o.maxIt) ')' ' /* Maximum number of iterations */' '\n'])];
 
+%% Declaration of variables
 optCode = [optCode, sprintf([o.indent.generic  'unsigned int conditions_f = 1, conditions_x = 1,' '\n' ...
     o.indent.generic o.indent.generic 'conditions_n = 1, cond_err = 1,' '\n',...
     o.indent.generic o.indent.generic 'it = 0, it_ls = 0, ii = 0, jj = 0;' '\n'...
@@ -967,7 +996,7 @@ optCode = [optCode, sprintf([o.indent.generic  'initialize_slack(u' c_psi_use c_
 optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Outer loop over the iterates it. The break command interrups the cycle \n'...
     o.indent.generic  'if convergence or error is encountered before termination */' '\n'])];
 
-optCode = [optCode, sprintf([o.indent.generic  'for (it=0; it < %i; it++) {' '\n'], o.maxIt)];
+optCode = [optCode, sprintf([o.indent.generic  'for (it=0; it < ' falcopt.internal.toDefineName(o.names.maximumIterations) '; it++) {' '\n'])];
 
 if (o.contractive || o.terminal)
     if o.terminal
@@ -1107,7 +1136,10 @@ else
 end
 
 %% start line search
-
+% Add line search parameters to defines
+defs = [defs, sprintf(['/** Line Search Parameters **/' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) ' (' falcopt.internal.num2str(o.maxItLs) ')' ' /* Maximum number of line search iterations */' '\n'])];
+% Generate line search
 if o.merit_function == 0
     
 
@@ -1115,12 +1147,12 @@ if o.merit_function == 0
          optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= minus_alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
-            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     else
         optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
-            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     end
     
     info.flops.it.comp = info.flops.it.comp +1;
@@ -1216,12 +1248,12 @@ else
         optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= minus_alpha*' falcopt.internal.num2str(o.eps*o.eps, o.precision) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
-            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     else
         optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= ' falcopt.internal.num2str(-alpha_eps2, o.precision) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
-            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+            o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     end
     
     info.flops.it.comp = info.flops.it.comp +1;
@@ -1311,7 +1343,7 @@ else
         ...
         o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
         o.indent.generic o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
-        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls<%d; it_ls++) {' '\n'], o.maxItLs)];
+        o.indent.generic o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     info.flops.it.comp = info.flops.it.comp +1;
     
     % update u and slp
@@ -1391,8 +1423,8 @@ end
 %% the code continues
 
 optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'iter_ls[it] = it_ls+1;','\n',...
-    o.indent.generic o.indent.generic 'if (it_ls== %d)' '\n',...
-    o.indent.generic o.indent.generic o.indent.generic 'cond_err = 0;' '\n\n'],o.maxItLs)];
+    o.indent.generic o.indent.generic 'if (it_ls == ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) ')' '\n',...
+    o.indent.generic o.indent.generic o.indent.generic 'cond_err = 0;' '\n\n'])];
 info.flops.once.add = info.flops.once.add +1;
 %         optCode = [optCode, sprintf(['if (it==1)
 
@@ -1440,7 +1472,7 @@ optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic '
 
 
 
-optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if (it == %d)' '\n'],o.maxIt-1)];
+optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if (it == ' falcopt.internal.toDefineName(o.names.maximumIterations) '-1)' '\n'])];
 optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'conditions_n = 0;' '\n'])];
 
 
@@ -1497,14 +1529,15 @@ info.flops.once.comp = info.flops.once.comp +3;
 
 if o.build_MEX
     mexName = o.name;
-    mexCode = falcopt.generateMEX(o.N, struct('x',o.nx,'u',o.nu,'w',o.nw), 'names',...
-        struct('fun','proposed_algorithm','mex',mexName), 'ref', o.objective.trackReference,...
+    mexCode = falcopt.generateMEX(o.N, struct('x',o.nx,'u',o.nu,'w',o.nw), ...
+        'names', struct('fun','proposed_algorithm','mex',mexName, 'maximumIterations', o.names.maximumIterations), ...
+        'ref', o.objective.trackReference,...
         'terminalContraction', o.terminal || o.contractive, 'indexContraction',...
         o.contractive, 'type', o.real,'maxIt',o.maxIt, 'timing', true, 'debug', o.debug,...
         'verbose', o.verbose, 'indent', o.indent, 'inline', o.inline, 'precision', o.precision);
-    final_code = [libr '\n' data '\n'  code '\n' optCode '\n' mexCode];
+    final_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' mexCode];
 else
-    final_code = [libr '\n' data '\n'  code '\n' optCode];
+    final_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode];
 end
 
 if ~isempty(o.gendir)
