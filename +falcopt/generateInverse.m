@@ -88,7 +88,7 @@ function [code, info] = generateInverse(varargin)
     end
     
     if any(options.symmetric)
-        warning('falcopt:generateInverse:MissingImplemementation', 'The special treatment of symmetric matrices has not yet been implemented. Ignoring...');
+        warning('falcopt:MissingImplemementation:SymmetricMatrix', 'The special treatment of symmetric matrices has not yet been implemented. Ignoring...');
     end
     
     %% Check dimension of M

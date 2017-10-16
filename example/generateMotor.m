@@ -21,6 +21,7 @@ function generateMotor(par)
     J.trackReference = true;                     % to track a desired (possibly time-varying) reference
 
     %% code generation ( with 4 different ways to generate derivatives)
+    warning('OFF', 'falcopt:MissingImplemementation:SymmetricMatrix');
     switch gradients
         case 'casadi' 
             % first option: Automatic differentiation via CasADi to generate derivatives
@@ -93,5 +94,6 @@ function generateMotor(par)
                 'jac_n_struct', jac_n_struct, 'K_n', K_n,...
                 'name', 'Motor_example_FalcOpt', 'gendir', 'FalcOpt');
     end
+    warning('ON', 'falcopt:MissingImplemementation:SymmetricMatric');
 end
 
