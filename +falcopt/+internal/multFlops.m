@@ -1,6 +1,6 @@
 %% multFlops multiply each element of struct a with scalar b.
 %
-% c = multFlops( a, b)
+% c = falcopt.internal.multFlops( a, b)
 %
 % Inputs:
 % a    - struct

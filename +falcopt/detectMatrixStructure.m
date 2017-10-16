@@ -54,7 +54,7 @@ function info = detectMatrixStructure(varargin)
     M = options.M;
     
     if any(options.symmetric)
-        warning('falcopt:detectMatrixStructure:MissingImplemementation', 'The special treatment of symmetric matrices has not yet been implemented. Ignoring...');
+        warning('falcopt:MissingImplemementation:SymmetricMatrix', 'The special treatment of symmetric matrices has not yet been implemented. Ignoring...');
     end
     
     %% Check dimension of M

@@ -128,12 +128,14 @@ function code = generateMEX(varargin)
     
     %% Generate code
     if options.verbose == 1
-        fprintf(['Generating code for ' names.mex '()\n']);
+        fprintf(['Generating code for ' options.names.mex '()\n']);
     end
     
     code = '';
     if options.timing
-        fprintf('. generating timer\n');
+        if options.verbose >= 2
+            fprintf('. generating timer\n');
+        end
         
         code = [code, sprintf(['\n' ...
                            options.indent.code '/*********' '\n' ...

@@ -7,8 +7,8 @@ function generateMotor(par)
 
     contractive = false;        % no constractive constraints
     terminal = false;             % no terminal constraints
-    gradients = 'casadi';
-    precision = 'single';
+    gradients = 'matlab';
+    precision = 'double';
 
     %% Dynamics of the system
     dynamics = @(x,u) model_upd(x,u,par.Ts);
@@ -21,6 +21,7 @@ function generateMotor(par)
     J.trackReference = true;                     % to track a desired (possibly time-varying) reference
 
     %% code generation ( with 4 different ways to generate derivatives)
+    warning('OFF', 'falcopt:MissingImplemementation:SymmetricMatrix');
     switch gradients
         case 'casadi' 
             % first option: Automatic differentiation via CasADi to generate derivatives
@@ -35,7 +36,7 @@ function generateMotor(par)
                 'box_lowerBound',par.umin, 'box_upperBound', par.umax,...
                 'contractive',contractive, 'terminal', terminal, ...
                 'debug',debug,'merit_function', merit_function,...
-                'eps',eps,'precision', precision,...
+                'eps',eps,'precision', precision, ...
                 'name', 'Motor_example_FalcOpt', 'gendir', 'generatedCode');
         case 'matlab'
             % second option: Automatic differentiation via Matlab symbolic toolbox
@@ -93,5 +94,6 @@ function generateMotor(par)
                 'jac_n_struct', jac_n_struct, 'K_n', K_n,...
                 'name', 'Motor_example_FalcOpt', 'gendir', 'FalcOpt');
     end
+    warning('ON', 'falcopt:MissingImplemementation:SymmetricMatric');
 end
 

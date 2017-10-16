@@ -1,8 +1,8 @@
 %% num2str Internal helper function to transform numbers into compact, readable strings for C
 %
-% s = falcopt.NUM2STR(num)
+% s = falcopt.internal.NUM2STR(num)
 %  or
-% s = falcopt.NUM2STR(num, precision)
+% s = falcopt.internal.NUM2STR(num, precision)
 %
 % Given a scalar "num" returns a string representation for C.
 % The precision (optional) determines how the number if printend.
