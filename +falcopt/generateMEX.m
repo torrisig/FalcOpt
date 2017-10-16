@@ -133,7 +133,9 @@ function code = generateMEX(varargin)
     
     code = '';
     if options.timing
-        fprintf('. generating timer\n');
+        if options.verbose >= 2
+            fprintf('. generating timer\n');
+        end
         
         code = [code, sprintf(['\n' ...
                            options.indent.code '/*********' '\n' ...

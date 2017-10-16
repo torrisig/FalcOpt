@@ -1537,11 +1537,17 @@ fclose(f);
 
 if o.compile
     if o.build_MEX
-        compile = ['mex ' filename ext_file ' -v -output ' mexName];
+        compile = ['mex ' filename ext_file];
+        if o.verbose >= 2
+            compile = [compile ' -v'];
+        end
+        compile = [compile ' -output ' mexName];
     else
         throw(MException('activate:build_MEX', 'The option build_MEX must be set to true to compile the code'));
     end
-    disp(compile);
+    if o.verbose >= 1
+        disp(compile);
+    end
     eval(compile);
 end
 
