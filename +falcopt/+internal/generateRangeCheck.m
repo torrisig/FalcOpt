@@ -81,7 +81,11 @@ function check = generateRangeCheck(varargin)
         elseif strcmp(options.precision, 'unsigned integer') && ranges{i}(1) == 0
             ranges{i} = sprintf([options.name ' <= ' falcopt.internal.num2str(ranges{i}(2), 'integer')]);
         else
-            ranges{i} = sprintf(['(' options.name ' >= ' falcopt.internal.num2str(ranges{i}(1), 'integer') ') && (' options.name ' <= ' falcopt.internal.num2str(ranges{i}(2), 'integer') ')']);
+            if strcmp(options.precision, 'unsigned integer') && ranges{i}(1) == 0
+                ranges{i} = sprintf([options.name ' <= ' falcopt.internal.num2str(ranges{i}(2), 'integer')]);
+            else
+                ranges{i} = sprintf(['(' options.name ' >= ' falcopt.internal.num2str(ranges{i}(1), 'integer') ') && (' options.name ' <= ' falcopt.internal.num2str(ranges{i}(2), 'integer') ')']);
+            end
         end
     end
     
