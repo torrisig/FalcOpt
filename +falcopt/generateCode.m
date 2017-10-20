@@ -96,8 +96,8 @@
 %
 % Code generation settings
 %
-%   build_MEX                   - Produce MEX file for use in Matlab. Default: true
-%   simulink                    - Generate Simulink block. Default: false
+%   buildTypes                  - A cell array of build types to be generated, can include
+%                                  'mex', 'simulink', 'production'. Default: 'mex'
 %   name                        - Name of the .c and .mex file (if any)
 %   gendir                      - Path of the .c file folder
 %   compile                     - Compile the generated code. Default: true
@@ -168,8 +168,7 @@ p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(
 p.addParameter('inline', '', @ischar);
 p.addParameter('name', 'my_code', @ischar);
 p.addParameter('names', defaultNames, @isstruct); % Internal naming
-p.addParameter('build_MEX', true, @islogical);
-p.addParameter('simulink', false, @islogical);
+p.addParameter('buildTypes', {'mex'}, @(x)(iscell(x) && all(cellfun(@(c)(any(strcmp(c, {'mex', 'simulink', 'production'}))), x))));
 p.addParameter('compile', true, @islogical);
 p.addParameter('gendir', '', @ischar);
 p.addParameter('verbose', 0, @isnumeric);
@@ -264,6 +263,7 @@ for f=1:length(fields)
         o.names.(fields{f}) = [o.names.prefix o.names.(fields{f})];
     end
 end
+o.names.fun = o.name;
 
 %% check objective fields
 if isfield( o.objective,'nonlinear')
@@ -643,6 +643,7 @@ else
 end
 
 %% Setup info
+info.names = o.names;
 info.flops.it = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
 info.flops.ls = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
 info.flops.once = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0, 'div', 0, 'casadi', 0);
@@ -1536,67 +1537,91 @@ optCode = [optCode, sprintf('} \n\n')];
 info.flops.once.add = info.flops.once.add +1;
 info.flops.once.comp = info.flops.once.comp +3;
 
-%% generate MEX
-
-if o.build_MEX
+%% Generate build types
+% generate MEX
+if any(strcmp('mex', o.buildTypes))
     mexName = o.name;
-    mexCode = falcopt.generateMEX(o.N, struct('x',o.nx,'u',o.nu,'w',o.nw), ...
+    mex_code = falcopt.generateMEX(o.N, struct('x',o.nx,'u',o.nu,'w',o.nw), ...
         'names', struct('fun','proposed_algorithm','mex',mexName, 'maximumIterations', o.names.maximumIterations), ...
         'ref', o.objective.trackReference,...
         'terminalContraction', o.terminal || o.contractive, 'indexContraction',...
         o.contractive, 'type', o.real,'maxIt',o.maxIt, 'timing', true, 'debug', o.debug,...
         'verbose', o.verbose, 'indent', o.indent, 'inline', o.inline, 'precision', o.precision);
-    final_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' mexCode];
-else
-    final_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode];
-end
-
-if ~isempty(o.gendir)
-    if (o.gendir(end) == '/')||(o.gendir(end) == '\')
-        o.gendir = o.gendir(1:end-1);
+	mex_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' mex_code];
+    if length(o.buildTypes) > 1
+        name = [o.name '_mex'];
+    else
+        name = o.name;
     end
-    file_folder = o.gendir;
-    if exist(file_folder, 'dir')~=7
-        mkdir(file_folder);
+    if ~isempty(o.gendir)
+        if (o.gendir(end) == '/')||(o.gendir(end) == '\')
+            o.gendir = o.gendir(1:end-1);
+        end
+        file_folder = o.gendir;
+        if exist(file_folder, 'dir')~=7
+            mkdir(file_folder);
+        end
+        filename = [file_folder '/' name '.c'];
+    else
+        filename = [name '.c'];
     end
-    filename = [file_folder '/' o.name '.c'];
-else
-    filename = [o.name '.c'];
-end
-
-
-ext_file = [];
-for k = 1:length(info.src)
-    ext_file = [ext_file, ' ', info.src{k}]; %#ok
-end
-if strcmp(o.gradients,'ccode')
-    if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
-        % avoid to compile twice external_functions.c
-        ext_file = [];
+    ext_file = [];
+    for k = 1:length(info.src)
+        ext_file = [ext_file, ' ', info.src{k}]; %#ok
     end
-end
-f = fopen(filename, 'w+');
-fprintf(f, final_code);
-fclose(f);
+    if strcmp(o.gradients,'ccode')
+        if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
+            % avoid to compile twice external_functions.c
+            ext_file = [];
+        end
+    end
+    f = fopen(filename, 'w+');
+    fprintf(f, mex_code);
+    fclose(f);
 
-if o.compile
-    if o.build_MEX
+    if o.compile
         compile = ['mex ' filename ext_file];
         if o.verbose >= 2
             compile = [compile ' -v'];
         end
         compile = [compile ' -output ' mexName];
-    else
-        throw(MException('activate:build_MEX', 'The option build_MEX must be set to true to compile the code'));
+        if o.verbose >= 1
+            disp(compile);
+        end
+        eval(compile);
     end
-    if o.verbose >= 1
-        disp(compile);
-    end
-    eval(compile);
 end
-
+% Generate production code
+if any(strcmp('production', o.buildTypes))
+    production_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode];
+    if ~isempty(o.gendir)
+        if (o.gendir(end) == '/')||(o.gendir(end) == '\')
+            o.gendir = o.gendir(1:end-1);
+        end
+        file_folder = o.gendir;
+        if exist(file_folder, 'dir')~=7
+            mkdir(file_folder);
+        end
+        filename = [file_folder '/' o.name '.c'];
+    else
+        filename = [o.name '.c'];
+    end
+    ext_file = [];
+    for k = 1:length(info.src)
+        ext_file = [ext_file, ' ', info.src{k}]; %#ok
+    end
+    if strcmp(o.gradients,'ccode')
+        if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
+            % avoid to compile twice external_functions.c
+            ext_file = [];
+        end
+    end
+    f = fopen(filename, 'w+');
+    fprintf(f, production_code);
+    fclose(f);
+end
 % generate simulink
-if o.simulink
+if any(strcmp('simulink', o.buildTypes))
     simulink_fcn = falcopt.generateSFunction(o.nx,o.nu,o.nw,o.N, 'maxIt',o.maxIt,...
                             'name',sprintf(['simulink_' o.name]), 'trackReference',o.objective.trackReference,...
                             'terminal',o.terminal, 'contractive',o.contractive, ...
