@@ -76,7 +76,7 @@ function [data, code, info] = generateData(varargin)
     p.addParameter('noones', false, @islogical);
     p.addParameter('stripped', false, @islogical);
     p.addParameter('type', 'double', @ischar);
-    p.addParameter('precision', '', @(s)(ischar(s) && any(strcmp(s, {'single', 'double'}))));
+    p.addParameter('precision', '', @(s)(ischar(s) && any(strcmp(s, {'single', 'double', 'integer'}))));
     p.addParameter('transpose', false, @islogical);
     p.addParameter('symmetric', false, @islogical);
     p.addParameter('indent', '    ', @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
