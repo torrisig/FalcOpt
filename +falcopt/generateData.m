@@ -80,8 +80,8 @@ function [data, code, info] = generateData(varargin)
     p.addParameter('transpose', false, @islogical);
     p.addParameter('symmetric', false, @islogical);
     p.addParameter('indent', '    ', @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
-    p.addParameter('static', true, @logical);
-    p.addParameter('const', true, @logical);
+    p.addParameter('static', true, @islogical);
+    p.addParameter('const', true, @islogical);
     p.addParameter('verbose', 0, @(x)(isnumeric(x) && x >= 0));
     p.parse(varargin{:});
     options = p.Results;
