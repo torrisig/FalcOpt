@@ -1602,9 +1602,9 @@ if any(strcmp('production', o.buildTypes))
         if exist(file_folder, 'dir')~=7
             mkdir(file_folder);
         end
-        filename = [file_folder '/' o.name '.c'];
+        filename = [file_folder '/' o.name];
     else
-        filename = [o.name '.c'];
+        filename = [o.name];
     end
     ext_file = [];
     for k = 1:length(info.src)
@@ -1616,7 +1616,7 @@ if any(strcmp('production', o.buildTypes))
             ext_file = [];
         end
     end
-    f = fopen(filename, 'w+');
+    f = fopen([filename '.c'], 'w+');
     fprintf(f, production_code);
     fclose(f);
 end
