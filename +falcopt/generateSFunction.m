@@ -49,7 +49,7 @@ function code = generateSFunction(varargin)
 % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 % SOFTWARE.
 %
-defaultNames = struct('maximumIterations', 'maximumIterations');
+defaultNames = struct('maximumIterations', 'maximumIterations','fun', 'myfun');
 
 p = inputParser;
 p.addRequired('nx', @isnumeric);
@@ -59,7 +59,6 @@ p.addRequired('N', @isnumeric);
 p.addParameter('maxIt', 0, @(x)(isnumeric(x) && x>=0 && mod(x,1)==0));
 p.addParameter('name','simulink_my_code', @ischar);
 p.addParameter('names', defaultNames, @isstruct);
-p.addParameter('function_name','proposed_algorithm', @ischar);
 p.addParameter('model_name','FalcOpt_lib', @ischar);
 p.addParameter('maskImage_name','mask_image',@ischar);
 p.addParameter('trackReference',false, @islogical);
@@ -75,14 +74,14 @@ o = p.Results;
 
 code = [];
 s_name = o.name; % name of .c file
-function_name = o.function_name;   % name of function called inside wrapper
+function_name = o.names.fun;   % name of function called inside wrapper
 model_name = o.model_name;
 
 % Names
 fields = fieldnames(defaultNames);
 for i=1:length(fields)
-    if ~isfield(options.names, fields{i})
-        options.names.(fields{i}) = defaultNames.(fields{i});
+    if ~isfield(o.names, fields{i})
+        o.names.(fields{i}) = defaultNames.(fields{i});
     end
 end
 
@@ -240,9 +239,12 @@ end
 code = [code, sprintf(' %s *%s){\n\n',out.(out_names{end}).data_c,out.(out_names{end}).name)];
 
 code = [code, sprintf([o.indent 'int i = 0;\n'...
-                       o.indent 'unsigned int it_ls[' falcopt.internal.toDefineName(options.names.maximumIterations) '];\n'...
+                       o.indent 'unsigned int lineSearch_nit[' falcopt.internal.toDefineName(o.names.maximumIterations) '];\n'...
                        o.indent real_T ' x[%i];\n'...
-                       o.indent real_T ' u[%i];\n'],o.nu*o.N,o.nu*o.N)];
+                       o.indent real_T ' u[%i];\n' ...
+                       o.indent real_T ' optimval[1];\n' ...
+                       o.indent real_T ' feasval[1];\n' ...
+                       o.indent real_T ' meritval[1];\n'],o.nu*o.N,o.nu*o.N)];
 if ~o.extra_output
   code = [code, sprintf([o.indent 'double fval = 0;\n'...
                          o.indent 'unsigned int iter = 0;\n'])];  
@@ -268,7 +270,7 @@ if o.extra_output
 else
     code = [code, '&fval, &iter, '];
 end
-code = [code, sprintf('it_ls);\n')];
+code = [code, sprintf('lineSearch_nit, optimval, feasval, meritval);\n')];
 code = [code, sprintf([o.indent 'for( i=0;i<%i;i++){ %s[i] = u[i];}\n'],o.nu*o.N,out.u.name)];
 code = [code, sprintf([o.indent 'for( i=0;i<%i;i++){ %s[i] = u[i];}\n'],o.nu,out.u_opt.name)];
 

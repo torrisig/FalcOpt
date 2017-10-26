@@ -1623,12 +1623,13 @@ end
 % generate simulink
 if any(strcmp('simulink', o.buildTypes))
     simulink_fcn = falcopt.generateSFunction(o.nx,o.nu,o.nw,o.N, 'maxIt',o.maxIt,...
+                            'names', struct('fun','proposed_algorithm', 'maximumIterations', o.names.maximumIterations), ...
                             'name',sprintf(['simulink_' o.name]), 'trackReference',o.objective.trackReference,...
                             'terminal',o.terminal, 'contractive',o.contractive, ...
                             'indent',o.indent.generic, 'precision',o.precision, ...
                             'type', o.real, 'debug', o.debug, ...
                             'maskImage_name','+falcopt\simulinkMask_logo.png');
-    simulink_code = [libr '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
+    simulink_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
     if ~isempty(o.gendir)
         name = sprintf([o.gendir '/simulink_' o.name '.c']);
     else
@@ -1637,6 +1638,10 @@ if any(strcmp('simulink', o.buildTypes))
     f = fopen(name, 'w+');
     fprintf(f, simulink_code);
     fclose(f);
+    ext_file = [];
+    for k = 1:length(info.src)
+        ext_file = [ext_file, ' ', info.src{k}]; %#ok
+    end
     % compile
     eval(sprintf(['mex ' name ext_file]));
 end
