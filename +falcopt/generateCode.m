@@ -1102,9 +1102,15 @@ if o.merit_function == 0
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
     
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Check the penalty parameter rho via phi0_dot */' '\n'])];
-    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr,alpha)==0){' '\n',...
-        o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
-        o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr'])];
+    if o.variable_stepSize.active
+        optCode = [optCode, sprintf(',alpha')];
+    else
+        optCode = [optCode, sprintf([',' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax)])];
+    end
+    optCode = [optCode, sprintf([')==0) {' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
+                                 o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Update the penalty parameter rho */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
@@ -4016,12 +4022,7 @@ code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real 
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
 code = [code, sprintf([o.indent.generic  'unsigned int res = 2;' '\n\n'])];
 
-
-if o.variable_stepSize.active
-    code = [code, sprintf([o.indent.generic 'if (dot_phi <= (-0.5*alpha_inverse)*(du_sqr + dsl_sqr))' '\n'])];
-else
-    code = [code, sprintf([o.indent.generic 'if (dot_phi <= 1.0/(2.0*' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ')*(du_sqr + dsl_sqr))' '\n'])];
-end
+code = [code, sprintf([o.indent.generic 'if (dot_phi <= (-' falcopt.internal.num2str(0.5, o.precision) '/alpha)*(du_sqr + dsl_sqr))' '\n'])];
 code = [code, sprintf([o.indent.generic o.indent.generic 'res = 1;' '\n',...
     o.indent.generic 'else' '\n',...
     o.indent.generic o.indent.generic 'res = 0;' '\n\n',...
