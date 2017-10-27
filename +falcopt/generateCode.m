@@ -636,7 +636,7 @@ if o.variable_stepSize.active
         o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
     end
 else
-    if isfield(o.variable_stepSize, 'alpha_max')
+    if ~isfield(o.variable_stepSize, 'alpha_max')
         % default value .alpha_max in case of constant step size
         o.variable_stepSize.alpha_max = 0.4;
     end
