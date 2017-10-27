@@ -896,8 +896,6 @@ if o.variable_stepSize.active
     data = [data, sprintf([o.indent.data 'static const ' o.real ' gamma_2 = ' falcopt.internal.num2str(o.variable_stepSize.increase_coeff,o.precision) ';\n\n'])];
 
     optCode = [optCode, sprintf([o.indent.generic o.real ' ared = 0.0, pred = 0.0, rat = 0.0' ';\n'])];
-else
-    optCode = [optCode, sprintf([o.indent.generic o.real ' alpha = ' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ';\n'])];
 end
 
 if o.debug > 1
@@ -1153,10 +1151,10 @@ if o.variable_stepSize.active
     defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaMin) ' (' falcopt.internal.num2str(o.variable_stepSize.alpha_min, o.precision) ')' ' /* Alpha min */' '\n'])];
 end
 defs = [defs, sprintf(['/* Derived quantities DO NOT TOUCH */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax*KKTTol */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax*KKTTol^2 */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ')' ' /* alphaMax^2*KKTTol */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax^2*KKTTol^2 */' '\n'])];
 
 % Generate line search
 if o.merit_function == 0
@@ -3648,7 +3646,7 @@ if (o.contractive || o.terminal)
             o.indent.generic 'v_Nnc[%d] = alpha_inverse * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     else
         code = [code, sprintf([o.indent.generic 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            o.indent.generic 'v_Nnc[%d] = 1.0/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+            o.indent.generic 'v_Nnc[%d] = ' falcopt.internal.num2str(1, o.precision) '/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     end
     
 end
