@@ -1481,7 +1481,7 @@ optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic 'constr_viol
 if o.variable_stepSize.active 
     optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= alpha_old*alpha_old*' falcopt.internal.toDefineName(o.names.KKTOptimalityToleranceSq) ')||(constr_viol>= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
 else
-    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
+    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ')||(constr_viol >= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
 end
 
 optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'conditions_x = 1;' '\n',...
@@ -1503,7 +1503,7 @@ if o.debug >2
     optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign optimality */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
     if o.variable_stepSize.active 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))*alpha_inverse; ' '\n'])];
     else 
         optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '; \n'])];
     end
