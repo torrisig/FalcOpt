@@ -387,18 +387,24 @@ end
 % create new block
 add_block('simulink/User-Defined Functions/S-Function', block_name,'MakeNameUnique', 'on');
 set_param( block_name,'FunctionName',s_name);
+set_param( block_name,'Position',[50 50 400 300])
 set_param( block_name,'Mask','on');
 
 % create Mask
 mask = [];
 % image Mask
-ud.logo = imread(o.maskImage_name);
-[h_im,w_im,~] = size(ud.logo);
-set_param(gcb,'position',[5,5,w_im,h_im]);
-set_param(gcb,'UserDataPersistent','on');
-set_param(gcb,'UserData',ud);
-mask = [mask, sprintf('ud = get_param(gcb,''UserData'');\n')];
-mask = [mask, sprintf('image(ud.logo,''center'');\n')];
+try
+    ud.logo = imread(o.maskImage_name);
+    [h_im,w_im,~] = size(ud.logo);
+    set_param(gcb,'position',[5,5,w_im,h_im]);
+    set_param(gcb,'UserDataPersistent','on');
+    set_param(gcb,'UserData',ud);
+    mask = [mask, sprintf('ud = get_param(gcb,''UserData'');\n')];
+    mask = [mask, sprintf('image(ud.logo,''center'');\n')];
+catch
+    warning(['image ' o.maskImage_name ' not found. Ignoring simulink block logo']);
+    mask = [mask,'disp(''FalcOpt\n %% no logo %%'');',sprintf('\n')];
+end
 
 % input ports label
 for k=1:nInputs
