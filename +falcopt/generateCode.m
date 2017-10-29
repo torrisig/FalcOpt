@@ -636,7 +636,7 @@ if o.variable_stepSize.active
         o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
     end
 else
-    if isfield(o.variable_stepSize, 'alpha_max')
+    if ~isfield(o.variable_stepSize, 'alpha_max')
         % default value .alpha_max in case of constant step size
         o.variable_stepSize.alpha_max = 0.4;
     end
@@ -896,8 +896,6 @@ if o.variable_stepSize.active
     data = [data, sprintf([o.indent.data 'static const ' o.real ' gamma_2 = ' falcopt.internal.num2str(o.variable_stepSize.increase_coeff,o.precision) ';\n\n'])];
 
     optCode = [optCode, sprintf([o.indent.generic o.real ' ared = 0.0, pred = 0.0, rat = 0.0' ';\n'])];
-else
-    optCode = [optCode, sprintf([o.indent.generic o.real ' alpha = ' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ';\n'])];
 end
 
 if o.debug > 1
@@ -1102,9 +1100,15 @@ if o.merit_function == 0
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
     
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic '/* Check the penalty parameter rho via phi0_dot */' '\n'])];
-    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr,alpha)==0){' '\n',...
-        o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
-        o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (conditions_rho_PM_simpler(phi0_dot,du_sqr,dsl_sqr'])];
+    if o.variable_stepSize.active
+        optCode = [optCode, sprintf(',alpha')];
+    else
+        optCode = [optCode, sprintf([',' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax)])];
+    end
+    optCode = [optCode, sprintf([')==0) {' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
+                                 o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Update the penalty parameter rho */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
@@ -1147,10 +1151,10 @@ if o.variable_stepSize.active
     defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaMin) ' (' falcopt.internal.num2str(o.variable_stepSize.alpha_min, o.precision) ')' ' /* Alpha min */' '\n'])];
 end
 defs = [defs, sprintf(['/* Derived quantities DO NOT TOUCH */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ')' ' /* alphaMax* */' '\n'])];
-defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax* */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax*KKTTol */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax*KKTTol^2 */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*' falcopt.internal.toDefineName(o.names.lineSearchAlphaTol) ')' ' /* alphaMax^2*KKTTol */' '\n'])];
+defs = [defs, sprintf(['#define ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ' (' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) '*' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) ')' ' /* alphaMax^2*KKTTol^2 */' '\n'])];
 
 % Generate line search
 if o.merit_function == 0
@@ -1162,7 +1166,7 @@ if o.merit_function == 0
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     else
-        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= -' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ') {' '\n',...
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= -' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
@@ -1263,7 +1267,7 @@ else
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
     else
-        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= -' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTol) ') {' '\n',...
+        optCode = [optCode, sprintf([o.indent.generic o.indent.generic 'if (phi0_dot <= -' falcopt.internal.toDefineName(o.names.lineSearchAlphaTolSq) ') {' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 't_u = 1.0;' '\n',...
             o.indent.generic o.indent.generic o.indent.generic 'for (it_ls = 0; it_ls < ' falcopt.internal.toDefineName(o.names.maximumLineSearchIterations) '; it_ls++) {' '\n'])];
@@ -1475,7 +1479,7 @@ optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic 'constr_viol
 if o.variable_stepSize.active 
     optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= alpha_old*alpha_old*' falcopt.internal.toDefineName(o.names.KKTOptimalityToleranceSq) ')||(constr_viol>= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
 else
-    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ')||(compute_max_Nnc(gpsp) >= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
+    optCode = [optCode,sprintf([o.indent.generic o.indent.generic 'if ((du_sqr >= ' falcopt.internal.toDefineName(o.names.lineSearchAlphaSqTolSq) ')||(constr_viol >= ' falcopt.internal.toDefineName(o.names.KKTOptimalityTolerance) '))' '\n'])];
 end
 
 optCode = [optCode,sprintf([o.indent.generic o.indent.generic o.indent.generic 'conditions_x = 1;' '\n',...
@@ -1497,7 +1501,7 @@ if o.debug >2
     optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign optimality */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
     if o.variable_stepSize.active 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/alpha_old; ' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))*alpha_inverse; ' '\n'])];
     else 
         optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '; \n'])];
     end
@@ -3502,7 +3506,7 @@ else
 end
 
 [d, c, in] = falcopt.generateMVMult(M_struct, ...
-    'names', struct('fun', 'scale_nu', 'M', {{'alpha'}}, 'v', {{'x'}}, 'r', 'z'), 'scale', -1, ...
+    'names', struct('fun', 'scale_nu', 'M', {{'alpha_I'}}, 'v', {{'x'}}, 'r', 'z'), 'scale', -1, ...
     'types', o.real, 'precision', o.precision, 'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'static',M_static,'structure','ordered');
 if ~isempty(d)
     data = [data, d, sprintf('\n')];
@@ -3520,7 +3524,7 @@ for jj=1:length(o.K_nc)
         M_static = true;
     end
     [~, c, in] = falcopt.generateMVMult(M_struct, ...
-        'names', struct('fun', ['scale_nc_' num2str(jj)], 'M', {{'alpha'}}, 'v', {{'x'}}, 'r', 'z'), 'scale', -1, ...
+        'names', struct('fun', ['scale_nc_' num2str(jj)], 'M', {{'alpha_I'}}, 'v', {{'x'}}, 'r', 'z'), 'scale', -1, ...
         'types', o.real, 'precision', o.precision, 'static', M_static,...
         'verbose', o.verbose, 'test', o.test, 'inline', o.inline, 'indent', o.indent,'structure','ordered');
   
@@ -3642,7 +3646,7 @@ if (o.contractive || o.terminal)
             o.indent.generic 'v_Nnc[%d] = alpha_inverse * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     else
         code = [code, sprintf([o.indent.generic 'dot_product_Nnu(&tmp_contr,dot_psi_N,dot_J);' '\n',...
-            o.indent.generic 'v_Nnc[%d] = 1.0/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ' * gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
+            o.indent.generic 'v_Nnc[%d] = ' falcopt.internal.num2str(1, o.precision) '/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '*gps[%d] - tmp_contr;' '\n'],sum(o.nc)-1, sum(o.nc)-1)];
     end
     
 end
@@ -4016,12 +4020,7 @@ code = [code, sprintf([o.inline ' int conditions_rho_PM_simpler (const ' o.real 
     o.real ' dsl_sqr, const ' o.real ' alpha){' '\n\n'])];
 code = [code, sprintf([o.indent.generic  'unsigned int res = 2;' '\n\n'])];
 
-
-if o.variable_stepSize.active
-    code = [code, sprintf([o.indent.generic 'if (dot_phi <= (-0.5*alpha_inverse)*(du_sqr + dsl_sqr))' '\n'])];
-else
-    code = [code, sprintf([o.indent.generic 'if (dot_phi <= 1.0/(2.0*' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) ')*(du_sqr + dsl_sqr))' '\n'])];
-end
+code = [code, sprintf([o.indent.generic 'if (dot_phi <= (-' falcopt.internal.num2str(0.5, o.precision) '/alpha)*(du_sqr + dsl_sqr))' '\n'])];
 code = [code, sprintf([o.indent.generic o.indent.generic 'res = 1;' '\n',...
     o.indent.generic 'else' '\n',...
     o.indent.generic o.indent.generic 'res = 0;' '\n\n',...
