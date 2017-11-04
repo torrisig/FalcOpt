@@ -18,8 +18,6 @@ function code = generateSFunction(varargin)
 %           model_name                 - name of the generated Simulink block
 %                                        Default: 'FalcOpt_lib'
 %           maskImage_name             - name of the simulink mask image
-%           extra_output               - if true add output ports for cost
-%                                        value and number of iterations. Default: false
 %           maxIt                      - max number of iterations. Default: 0
 %           trackReference             - if 'true' add input for reference
 %           terminal                   - if 'true' add input for 'c' terminal constant
@@ -120,11 +118,6 @@ switch o.precision
         real_c = 'real_T';
 end
 
-% extra_output
-if o.debug > 2
-    o.extra_output = true;
-end
-
 
 %% display informations
 fprintf('\n\ngenerating Simulink S-Function and block ...')
@@ -135,6 +128,12 @@ code = [ code, sprintf(['#define S_FUNCTION_NAME ' s_name '\n'...
         '#define S_FUNCTION_LEVEL 2\n\n'])];
     
 % input ports parameters
+% for each port must specify: 
+%   .name: the name that will appear in simlink block
+%   .size: the size of the port 
+%   .data_s: data type in simulink
+%   .data_c: data type will be passed to algorithm (c-type)
+
 % u_pred
 in.u_pred.name = 'u_pred';
 in.u_pred.size = o.nu*o.N;
@@ -163,12 +162,12 @@ if o.trackReference
 end
 if o.terminal||o.contractive
     if o.contractive
-        in.c_ind.name = 'c_index';
+        in.c_ind.name = 'contraction_idx';
         in.c_ind.size = 1;
         in.c_ind.data_s = 'SS_UINT32';
         in.c_ind.data_c = 'uint32_T';
     end
-    in.c.name = 'c';
+    in.c.name = 'contraction_c';
     in.c.size = 1;
     in.c.data_s = real_s;
     in.c.data_c = real_c;
@@ -194,20 +193,49 @@ out.u.size = o.nu*o.N;
 out.u.data_s = real_s;
 out.u.data_c = real_c;
 
-if o.extra_output
+
+if o.debug > 1
+    % fval
     out.fval.name = 'fval';
     out.fval.size = 1;
     out.fval.data_s = real_s;
     out.fval.data_c = real_c;
     
-    out.iter.name = 'iter';
-    out.iter.size = 1;
-    out.iter.data_s = 'SS_UINT32';
-    out.iter.data_c = 'uint32_T';
+    % x
+    out.x.name = 'x';
+    out.x.size = o.nu*o.N;
+    out.x.data_s = real_s;
+    out.x.data_c = real_c;   
 end
 
+if o.debug > 2
+    
+    % optimval
+    out.optimval.name = 'optimval';
+    out.optimval.size = 1;
+    out.optimval.data_s = real_s;
+    out.optimval.data_c = real_c;
+    
+    % feasval
+    out.feasval.name = 'feasval';
+    out.feasval.size = 1;
+    out.feasval.data_s = real_s;
+    out.feasval.data_c = real_c;
+    
+    % meritval
+    out.meritval.name = 'meritval';
+    out.meritval.size = 1;
+    out.meritval.data_s = real_s;
+    out.meritval.data_c = real_c;
+end
 
+% number iteration
+out.iter.name = 'iter';
+out.iter.size = 1;
+out.iter.data_s = 'SS_UINT32';
+out.iter.data_c = 'uint32_T';
 
+% exitflag
 out.flag.name = 'flag';
 out.flag.size = 1;
 out.flag.data_s = 'SS_INT32';
@@ -228,7 +256,7 @@ code = [ code, sprintf(['#if defined(MATLAB_MEX_FILE)\n'...
                         '#endif\n\n'])];                   
  
                     
-%% algorithm call wrapper function
+%% algorithm wrapper function
 code = [code, sprintf('void algorithm_wrapper(')];
 for k=1:nInputs
     code = [code, sprintf([' const %s *%s,'],in.(in_names{k}).data_c,in.(in_names{k}).name)]; %#ok
@@ -238,39 +266,40 @@ for k=1:nOutputs-1
 end
 code = [code, sprintf(' %s *%s){\n\n',out.(out_names{end}).data_c,out.(out_names{end}).name)];
 
-code = [code, sprintf([o.indent 'int i = 0;\n'...
-                       o.indent 'unsigned int lineSearch_nit[' falcopt.internal.toDefineName(o.names.maximumIterations) '];\n'...
-                       o.indent real_T ' x[%i];\n'...
-                       o.indent real_T ' u[%i];\n' ...
-                       o.indent real_T ' optimval[1];\n' ...
-                       o.indent real_T ' feasval[1];\n' ...
-                       o.indent real_T ' meritval[1];\n'],o.nu*o.N,o.nu*o.N)];
-if ~o.extra_output
-  code = [code, sprintf([o.indent 'double fval = 0;\n'...
-                         o.indent 'unsigned int iter = 0;\n'])];  
-end
+% internal variables ( max number iteration and vector u )
+code = [code, sprintf([o.indent 'int i=0;\n' ...
+                       o.indent 'unsigned int lineSearch_nit[' falcopt.internal.toDefineName(o.names.maximumIterations) '];\n' ...
+                       o.indent real_T ' u[%i];\n'], o.nu*o.N)];
 
+% Prepare inputs
 code = [code, sprintf(['\n' o.indent 'for( i=0;i<%i;i++){ u[i] = %s[i];}\n'],o.nu*o.N,in.u_pred.name)];
-code = [code, sprintf([o.indent '%s[0] = %s( %s, u, '],out.flag.name,function_name,in.x0.name)];
+
+% call algorithm function
+code = [code, sprintf([o.indent '%s[0] = %s( %s, u, '],out.flag.name,function_name,in.x0.name)]; % flag = fct_name(x0,u,
 if o.nw>0
-    code = [code, sprintf('%s, ',in.w.name)];
+    code = [code, sprintf('%s, ',in.w.name)]; % w
 end
 if o.trackReference
-    code = [code, sprintf('%s, %s, ',in.xref.name,in.uref.name)];
+    code = [code, sprintf('%s, %s, ',in.xref.name,in.uref.name)];  % xref, uref
 end
 if o.terminal||o.contractive
     if o.contractive
-        code = [code, sprintf('*%s, ',in.c_ind.name)];
+        code = [code, sprintf('*%s, ',in.c_ind.name)]; % contraction_idx
     end
-    code = [code, sprintf('*%s, ',in.c.name)];
+    code = [code, sprintf('*%s, ',in.c.name)]; % contraction_c
 end
-code = [code, 'x, '];
-if o.extra_output 
-    code = [code, sprintf('%s, %s, ',out.fval.name,out.iter.name)];
+
+if o.debug > 1
+    code = [code, sprintf('%s, %s, ', out.x.name, out.fval.name)]; % x, fval
+end
+if o.debug > 2
+    code = [code, 'iter, lineSearch_nit, ']; %TODO tommaso check
+    code = [code, sprintf('%s, %s, %s);\n', out.optimval.name, out.feasval.name, out.meritval.name)]; % optimval, feasval, meritval
 else
-    code = [code, '&fval, &iter, '];
+    code = [code, sprintf('iter, lineSearch_nit);\n ')];%TODO tommaso check
 end
-code = [code, sprintf('lineSearch_nit, optimval, feasval, meritval);\n')];
+
+% prepare outputs
 code = [code, sprintf([o.indent 'for( i=0;i<%i;i++){ %s[i] = u[i];}\n'],o.nu*o.N,out.u.name)];
 code = [code, sprintf([o.indent 'for( i=0;i<%i;i++){ %s[i] = u[i];}\n'],o.nu,out.u_opt.name)];
 
