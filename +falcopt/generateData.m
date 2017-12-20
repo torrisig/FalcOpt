@@ -37,8 +37,8 @@
 %  .verbose   - Level of procedural output of this function
 % If fields of options structs are ommitted, the default is used.
 % 
-
-% Copyright (c) 2017 Damian Frick <falcopt@damianfrick.com>
+% Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
+%                    Damian Frick <falcopt@damianfrick.com>
 % 
 % Permission is hereby granted, free of charge, to any person obtaining a copy
 % of this software and associated documentation files (the "Software"), to deal

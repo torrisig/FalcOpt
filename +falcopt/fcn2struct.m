@@ -13,7 +13,8 @@
 % - info: .structure : the structure of the matrix
 %         .flops: the flops of the function
 %
-% Copyright (c) 2017 Tommaso Robbiani <tommasro@student.ethz.ch>
+% Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
+%                    Tommaso Robbiani <tommasro@student.ethz.ch>
 %           
 % 
 % Permission is hereby granted, free of charge, to any person obtaining a copy

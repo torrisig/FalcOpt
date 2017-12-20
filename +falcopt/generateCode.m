@@ -116,7 +116,8 @@
 %   info:                       - a struct containing the number of FLOPS
 %
 %
-% Copyright (c) 2017 Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
+% Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
+%                    Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
 %                    Tommaso Robbiani <tommasro@student.ethz.ch>
 %
 % Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -651,6 +652,16 @@ info.src = {};
 info.header = {};
 
 %% Generating code
+copyright = sprintf(['/* Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory */' '\n' ...
+    '/* Main developers: */' '\n' ...
+    '/* Giampaolo Torrisi <giampaolo.torrisi@gmail.com> */' '\n' ...
+    '/* Damian Frick <falcopt@damianfrick.com> */' '\n' ...
+    '/* Tommaso Robbiani <tommasro@student.ethz.ch> */' '\n' ...
+    '/* Scientic Contributors: */' '\n' ...
+    '/* Sergio Grammatico */' '\n' ...
+    '/* Roy S. Smith */' '\n' ...
+    '/* Manfred Morari */' '\n']);
+
 libr = sprintf(['#include "math.h"' '\n']);
 defs = ''; % Defines
 code = '';
@@ -1551,7 +1562,7 @@ if any(strcmp('mex', o.buildTypes))
         'terminalContraction', o.terminal || o.contractive, 'indexContraction',...
         o.contractive, 'type', o.real,'maxIt',o.maxIt, 'timing', true, 'debug', o.debug,...
         'verbose', o.verbose, 'indent', o.indent, 'inline', o.inline, 'precision', o.precision);
-	mex_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' mex_code];
+	mex_code = [copyright  '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' mex_code];
     if length(o.buildTypes) > 1
         name = [o.name '_mex'];
     else
@@ -1597,7 +1608,7 @@ if any(strcmp('mex', o.buildTypes))
 end
 % Generate production code
 if any(strcmp('production', o.buildTypes))
-    production_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode];
+    production_code = [copyright  '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode];
     if ~isempty(o.gendir)
         if (o.gendir(end) == '/')||(o.gendir(end) == '\')
             o.gendir = o.gendir(1:end-1);
@@ -1633,7 +1644,7 @@ if any(strcmp('simulink', o.buildTypes))
                             'indent',o.indent.generic, 'precision',o.precision, ...
                             'type', o.real, 'debug', o.debug, ...
                             'maskImage_name','+falcopt\simulinkMask_logo.png');
-    simulink_code = [libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
+    simulink_code = [copyright '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
     if ~isempty(o.gendir)
         name = sprintf([o.gendir '/simulink_' o.name '.c']);
     else

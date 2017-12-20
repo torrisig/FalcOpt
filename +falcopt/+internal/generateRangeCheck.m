@@ -18,7 +18,8 @@
 %        num = 33e-6 becomes s = '3.3e-05f'.
 %
 
-% Copyright (c) 2017 Damian Frick <falcopt@damianfrick.com>
+% Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
+%                    Damian Frick <falcopt@damianfrick.com>
 %                    Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
 %                    Tommaso Robbiani <tommasro@student.ethz.ch>
 %

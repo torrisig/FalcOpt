@@ -27,7 +27,8 @@ function code = generateSFunction(varargin)
 %           type                       - data type, either 'float', 'single' or 'double',
 %           debug                      - level of debug code that is generated. Default is 1.
 %
-% Copyright (c) 2017 Tommaso Robbiani <falcopt@tommasorobbiani.com>
+% Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
+%                    Tommaso Robbiani <tommasro@student.ethz.ch>
 % 
 % Permission is hereby granted, free of charge, to any person obtaining a copy
 % of this software and associated documentation files (the "Software"), to deal
