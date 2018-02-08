@@ -431,7 +431,7 @@ if ~isempty(o.K_n)&&~strcmp(o.gradients, 'ccode')
         test_u1 = ones(1,o.nu);
         test_f1 = o.constraints_handle{ii}(test_u1);
         
-        test_u2 = ones(o.nu,1);
+        test_u2 = ones(1,o.nu);
         test_f2 = o.constraints_handle{ii}(test_u2);
         
         if ((size(test_f1, 1) > 1) && (size(test_f1, 2) > 1))&&((size(test_f2, 1) > 1) && (size(test_f2, 2) > 1))
