@@ -428,7 +428,7 @@ end
 % check dims of the function handles
 if ~isempty(o.K_n)&&~strcmp(o.gradients, 'ccode')
     for ii = 1:o.N
-        test_u1 = ones(1,o.nu);
+        test_u1 = ones(o.nu,1);
         test_f1 = o.constraints_handle{ii}(test_u1);
         
         test_u2 = ones(o.nu,1);
@@ -2192,6 +2192,7 @@ if( nl_con)
                 catch
                     error('inequality constraints can depend only on inputs' );
                 end
+                error('inequality constraints must depend on a column vector u (not a row vector)' );
             end
         else
             error('inequality constraints can depend only on input u' );
