@@ -21,12 +21,10 @@
 %                'indexed' for ommitted zero and recurring elements including permutation of elements (elements of non-static matrices are stored according to their values as indices starting from 1)
 %  .noones    - A boolean, if true, then 1 and -1 are not stored and
 %                info.ones contains the structure. Default: false.
-%  .type      - A string that indicates the data type, either 'single' or 'double'.
-%                Default is 'double'.
+%  .type     - A string that indicates the data type, can be 'float', 'double' or a custom type.
+%                Needs to be compatible with the floating-point type of .precision. Default: double
 %  .precision - A string that determines the precision of computation and stored data in the generated code. 
 %                Needs to be either 'single' or 'double'. Default: '' (unspecified, will try to extract from type);
-%  .types     - A string that indicates the data type, can be 'float', 'double' or a custom type.
-%                Needs to be compatible with the floating-point type of .precision. Default: double
 %  .transpose - A boolean, if true then the matrix is transposed.
 %  .symmetric - A boolean, if true then the matrix is considered symmetric and only half is stored.
 %                Default: false.
@@ -146,7 +144,7 @@ function [data, code, info] = generateData(varargin)
             case 'double'
                 options.precision = 'double';
             otherwise
-                warning([functionId ':InvalidPrecision'], ['Precision was not specified, could not infer proper precision from given type "' options.types.data '". Setting to "double".']);
+                warning([functionId ':InvalidPrecision'], ['Precision was not specified, could not infer proper precision from given type "' options.type '". Setting to "double".']);
                 options.precision = 'double';
         end
     end
