@@ -1,124 +1,148 @@
-% GENERATECODE Generate the algorithm .c file
+%% generateCode Generate an embeddable FalcOpt solver in C
+% tailored to your model predictive control (MPC) problem.
 %
-% [info] = generateCode(N,nx,nu,nc,Q,p,R, 'par1', val1, 'par2', val2, ...) [with options]
+% Given a nonlinear MPC problem of the following form:
+% min_{x,u} sum_{k=0}^{N-1} l(xk,uk) + lN(xN)
+%     s.t.  xk+1 = f(xk,uk)        for k=0,...,N-1
+%           x0 = initial state
+%           uk in [ak,bk]          for k=0,...,N-1
+%           nk(uk) <= 0            for k=0,...,N-1
+%           0.5*xN'*D*xN <= c
 %
-% where required inputs are:
+% with prediction horizon N, state dimension nx and input dimension nu.
 %
-%  dynamics                     - System dynamics
-%  N                            - Prediction horizon
-%  nx                           - Number of states
-%  nu                           - Number of inputs
-%  objective                    - Matlab structure with fields:
-%                                   .Q: weight matrix for states (cost)
-%                                   .R: weight matrix for inputs (cost)
-%                                   .P: weight matrix for terminal states (cost)
-%                                 or:
-%                                   .nonlinear: nonlinear cost function for stages k~=N
-%                                   .nonlinearN: nonlinear cost function for final stage k=N
-%                                 additionally:
-%                                   .trackReference: a boolean. Track a desired time-varying reference. 
-%                                                        Default: false
+% This function can be called as
 %
-% The following options are available:
+% [info] = generateCode(dynamics, N, nx, nu, objective) [with options]
+% or
+% [info] = generateCode(dynamics, N, nx, nu, objective, ...) [with options]
 %
-% Problem definition options
+% it generates C code and a MEX file in the folder specificed with the option
+%  'gendir' (default: '../'), where the file name of the main .c file is given by
+%  'name' (default: 'my_code').
+% it returns a structure containing TODO
 %
-%   nw                          - Known disturbance dimension
-%   box_lowerBound              - Lower bound constraint for the inputs: either a nu*1 or nu*N matrix
-%                                               (stage-wise variable constraints)
-%   box_upperBound              - Upper bound constraint for the inputs: either a nu*1 or nu*N matrix
-%                                               (stage-wise variable constraints)
-%   constraints_handle          - A function handle for provided nonlinear constraint function
-%                                               or a 1*N cell of function handles
-%   nn                          - number of nonlinear constraints
-%                                               or a cell 1*N (stage-wise variable constraints)
-%   contractive                 - A boolean. Default: 'false'
-%   terminal                    - A boolean. Default: 'false'
-%   precision                   - 'double'(default) or 'single'
+% The required inputs are:
+%  dynamics  - A function handle for the system dynamics of the form 
+%               d/dx = f = @(x,u)( ... ), e.g. for linear dynamics
+%               d/dx = f = @(x,u)(A*x + B*u).
+%               Dynamics can be made parameter-dependent via the option 'nw' (see below).
+%  N         - The prediction horizon, a positive integer.
+%  nx        - The dimension of the state vector at time k.
+%  nu        - The dimension of the input vector at time k.
+%  objective - A struct defining the MPC objective function, i.e. defining
+%                l(xk,uk) and l(xN).
+%               Either struct('Q', Q, 'R' R, 'P', P) for quadratic objective, where
+%                .Q a matrix of dimension nx times nx is the state stage objective,
+%                .R a matrix of dimension nu times nu is the input stage objective,
+%                .P a matrix of dimension nx times nx is the final state objective,
+%                 i.e., l(xk,uk) = xk'*Q*xk + uk'*R*uk and lN(xN) = xN'*P*xN.
+%               Or struct('nonlinear', Q, 'R' R, 'P', P) for arbitrary nonlinear objective
+%                 .nonlinear a function handle for the nonlinear stage cost function
+%                   of the form l = @(x,u)( ... ),
+%                 .nonlinearN a function handle for the nonlinear final state cost function
+%                   of the form lN = @(x)( ... ).
+%               Additionally, 
+%                .trackReference a boolean to enable reference tracking, to track a
+%                  time-varying reference. Default: false.
 %
-% Computation of Jacobians
-%
-%   gradients                   - Different way of automatic function differentiation/generation
-%                                               Can be: 'casadi', 'matlab', 'manual' or 'ccode'. Default: 'casadi'
-%   Jac_x_static                - Boolean, false(default): Jacobian_x is dynamic
-%                                               (i.e., it depends on x and/or u)
-%   Jac_u_static                - Boolean, false(default): Jacobian_u is dynamic
-%                                               (i.e., it depends on x and/or u)
-%   external_jacobian_x         - Function handle to provide jacobian_x
-%                                               (only with options gradients = 'manual')
-%   external_jacobian_u         - Function handle to provide jacobian_u
-%                                               (only with options gradients = 'manual')
-%   external_jacobian_n         - Function handle to provide jacobian_n
-%                                               (only with options gradients = 'manual')
-%   Jac_x_struct                - Matrix containing the structure of the derivative
-%                                               of 'dynamics' wrt to x (only for 'gradients' =
-%                                               'ccode')
-%   Jac_u_struct                - Matrix containing the structure of the derivative
-%                                               of 'dynamics' wrt to u (only for 'gradients' =
-%                                               'ccode')
-%   Jac_n_struct                - Matrix containing the structure of the derivative
-%                                               of 'constraints_handle' wrt to u (only for
-%                                               'gradients' = 'ccode')
-%   K_n                         - Cell containing the vectors of the different stages
-%                                               on which the nonlinear constraints apply (only for
-%                                               'gradients' = 'ccode')
-%
-% Tolerance and max iteration settings
-%
-%   eps                         - Tolerance on KKT optimality. Default: 1e-3
-%   maxIt                       - Max number of iterations. Default: 4000
-%   maxItLs                     - Max number of line search iterations. Default: 10
-%
-% Algorithm parameters
-%
-%   variable_stepSize           - struct with fields: 
-%                                       active: activates variable step size, via a trust-region procedure
-%                                                   if false is set to constant (alpha_max specified next). Default: true
-%                                       alpha_max: maximum step size. If not specified, it is computed via second order 
-%                                                   information around the assumed equilibrium x = 0, u = 0 (requires CasADi)
-%                                       alpha_min: minimum step size. If not specified, is set to 0.1*alpha_max
-%                                       steady_state_state: if specified, alpha_max is computed around this equilibrium
-%                                                   otherwise around x = 0
-%                                       steady_state_input: if specified, alpha_max is computed around this equilibrium
-%                                                   otherwise around u = 0
-%                                       increase_threshold: define upper bound for trust-region. Default value: 0.75
-%                                       increase_coeff: coefficient >1 by which we increase the trust-region
-%                                                   Default value: 1.33
-%                                       decrease_threshold: lower bound for the trust-region: Default value: 0.25
-%                                       decrease_coeff: coefficient <1 by which we decrease the trust-region
-%                                                   Default value: 0.75
-%   merit_function              - Merit function:
-%                                       0: Augmented Lagrangian
-%                                       1,2(default) or Inf: l_1, l_2(default) or l_Inf
-%                                                   non-smooth penalty function
-%   parLs                       - Armijo line search step parameter. Default: 0.3
-%   tolLs                       - Line search min progress. Default: 1e-4
-%
-% Code generation settings
-%
-%   buildTypes                  - A cell array of build types to be generated, can include
-%                                  'mex', 'simulink', 'production'. Default: 'mex'
-%   name                        - Name of the .c and .mex file (if any)
-%   gendir                      - Path of the .c file folder
-%   compile                     - Compile the generated code. Default: true
-%   verbose                     - Level of procedural output of this function.
-%                                                  Default: 0
-%   test                        - Level of internal numerical tests performed.
-%                                                  Default: 0
-%   debug                       - Level of debug (number of inputs/outputs of
-%                                                  generated functions). Default: 1
-%   indent                      - Indentation to be used in code generation.
-%                                                   Default: struct('code', '', 'data', '', 'generic', '\t' )
-%   inline                      - Inline keyword to be used. Default: 'inline'
-%
-% Outputs:
-%
-%   info:                       - a struct containing the number of FLOPS
-%
-%
+% The following options are available and can be set as key-value pairs, e.g. 'optionName', optionValue
+% 0) General settings
+%   verbose - Level of procedural output of the code generation. Default: 0.
+%   test    - Level of internal numerical tests performed. Default: 0.
+%   debug   - Level of debug (relates to number of inputs/outputs of generated functions). Default: 1.
+% 1) Problem constraints
+%   lb          - Lower bound constraints on the inputs. Either
+%                  a vector of length nu, or
+%                  a matrix of dimension nu times N for individual bounds for each stage.
+%                  Default: [] (no bounds).
+%   ub          - Upper bound constraints on the inputs. Either
+%                         a vector of length nu, or
+%                         a matrix of dimension nu times N for individual bounds for each stage.
+%                         Default: [] (no bounds).
+%   constraints - Nonlinear input stage constraints nk(uk). Either
+%                  a function handle if each stage has the same constraint, i.e., nk(uk)=n(uk), or
+%                  a cell of N function handles, with individual constrains for each stage.
+%                  The function handles are of form n = @(u)(...). Default: {} (mo constraints).
+%   nn          - The dimension of the constraint vector n, or
+%                  a vector of length N with dimensions for the onstraint vectors nk, for each k.
+%   terminal    - TODO
+%   contractive - TODO
+% 2) Parameters/known disturbances
+%     Parameters entering the dynamics can be added by specifying the folowing option:
+%   nw          - Parameter/disturbance dimension. Default: 0.
+%     If nw > 0 then the dynamics need to be a function of w, i.e. d/dx = f = @(x,u,w)( ... ),
+%      e.g. for linear dynamics d/dx = f = @(x,u,w)(A*x + B*u + C*w).
+% 3) Code generation settings
+%   name       - Name of the generated solver. Will also be the name of the .c, .mex and simulink file (if generated).
+%                 Default: 'my_code'.
+%   gendir     - Target directory for generated files. Needs to be a valid (existing) directory. Default: './'.
+%   precision  - The precision of the computation and data used. Can be either 'double' or 'single'. Defaukt: 'double'.
+%   buildTypes - A cell array of build types to be generated, can include
+%                 'mex', 'simulink', 'production'. Default: 'mex'.
+%   compile    - Whether the generated code is compiled. Default: true.
+%   gradients  - How to do code generation for function evaluation and gradient/Jacobian computation.
+%                 Can be 'matlab' using MATLAB code generation,
+%                        'casadi' using CasADi (https://github.com/casadi/casadi/wiki),
+%                        'manual' where user supplied functions for gradient/Jacobian computation
+%                          is translated into C code using MATLAB code generation. See 'external' below.
+%                        'ccode', where user supplied C code for gradient/Jacobian computation
+%                          is incorporated into the generated code.
+%                 Default: 'matlab'.
+%   external   - A struct containing needed data for the 'manual' or 'ccode' gradients setting.
+%                 for 'manual' .manual.jacobian_x is a function @(x,u)(...) that returns
+%                                the Jacobian of the dynamics with respect to x.
+%                              .manual.jacobian_u is a function @(x,u)(...) that returns
+%                                the Jacobian of the dynamics with respect to u.
+%                              .manual.jacobian_n is a function (or cell of functions) @(u)(...) that returns
+%                                the Jacobian of n(uk) (or Jacobians of nk(uk)).
+%                 for 'ccode' .ccode.c is a file with C code implementing the evaluation of the dynamics and Jacobian computations.
+%                             .ccode.h is the corresponding header file.
+%                             .ccode.jacobian_x.structure is a Matrix containing the structure of
+%                               the Jacobian of the dynamics with respect to x. Default: no structure.
+%                             .ccode.jacobian_x.static is a Boolean, which is true if the Jacobian is static,
+%                               i.e. if it does not depend on x and u. Default: true.
+%                             .ccode.jacobian_u.structure is a Matrix containing the structure of
+%                               the Jacobian of the dynamics with respect to u. Default: no structure.
+%                             .ccode.jacobian_u.static is a Boolean, which is true if the Jacobian is static,
+%                               i.e. if it does not depend on x and u. Default: true.
+%                             .ccode.jacobian_n.structure is a Matrix containing the structure of
+%                               the Jacobian of n(uk).
+%                             .ccode.K_n a cell array containing the vectors of the different stages
+%                               to which the nonlinear constraints apply.
+%   * Internal code generation settings
+%   indent     - Indentation used in code generation. Default: struct('code', '', 'data', '', 'generic', '\t' ).
+%   inline     - Inline keyword to be used. Default: ''.
+%   names      - A struct used for internal naming. Do not modify unless you know what you are doing.
+% 4) Algorithm parameters, tolerance and max. iteration settings
+%   eps               - Tolerance on KKT optimality. Default: 1e-3.
+%   maxIt             - Max number of iterations. Default: 4000.
+%   maxItLs           - Max number of line search iterations. Default: 10
+%   variable_stepSize - struct with fields: 
+%                        .active a boolean that activates variable step size, via a trust-region procedure
+%                          if false is set to constant (alpha_max specified next). Default: true
+%                        .alpha_max maximum step size. If not specified, it is computed via second order 
+%                          information around the assumed equilibrium x = 0, u = 0 (requires CasADi)
+%                        .alpha_min minimum step size. If not specified, is set to 0.1*alpha_max
+%                        .steady_state_state if specified, alpha_max is computed around this equilibrium
+%                          otherwise around x = 0.
+%                        .steady_state_input if specified, alpha_max is computed around this equilibrium
+%                          otherwise around u = 0.
+%                        .increase_threshold define upper bound for trust-region. Default: 0.75.
+%                        .increase_coeff coefficient >1 by which we increase the trust-region. Default: 1.33.
+%                        .decrease_threshold lower bound for the trust-region: Default: 0.25.
+%                        .decrease_coeff coefficient <1 by which we decrease the trust-region. Default: 0.75.
+%   merit_function    - Merit function selection
+%                        0: Augmented Lagrangian
+%                        1, 2 or Inf: l_1, l_2(default) or l_Inf non-smooth penalty function
+%                        Default: 2.
+%   parLs             - Armijo line search step parameter. Default: 0.3.
+%   tolLs             - Line search min progress. Default: 1e-4.
+
 % Copyright (c) 2017, ETH Zurich, Automatic Control Laboratory 
 %                    Giampaolo Torrisi <giampaolo.torrisi@gmail.com>
 %                    Tommaso Robbiani <tommasro@student.ethz.ch>
+%                    Damian Frick <falcopt@damianfrick.com>
 %
 % Permission is hereby granted, free of charge, to any person obtaining a copy
 % of this software and associated documentation files (the "Software"), to deal
@@ -139,509 +163,86 @@
 % SOFTWARE.
 
 function [info] = generateCode(varargin)
-defaultNames = struct('maximumIterations', 'maximumIterations', ...
-                      'maximumLineSearchIterations', 'maximumLineSearchIterations', ...
-                      'lineSearchAlphaMax', 'lineSearchAlphaMax', ...
-                      'lineSearchAlphaMin', 'lineSearchAlphaMin', ...
-                      'lineSearchAlphaTol', 'lineSearchAlphaTol', ...
-                      'lineSearchAlphaTolSq', 'lineSearchAlphaTolSq', ...
-                      'lineSearchAlphaSqTol', 'lineSearchAlphaSqTol', ...
-                      'lineSearchAlphaSqTolSq', 'lineSearchAlphaSqTolSq', ...
-                      'KKTOptimalityTolerance', 'KKTOptimalityTolerance', ...
-                      'KKTOptimalityToleranceSq', 'KKTOptimalityToleranceSq');
-                  
-indentTypes = {'generic', 'data', 'code'};
-p = inputParser;
-p.addRequired('dynamics', @(x)isa(x,'function_handle'));
-p.addRequired('N', @isnumeric); % prediction horizon
-p.addRequired('nx', @isnumeric); % state dimension
-p.addRequired('nu', @isnumeric); % input dimension
-p.addRequired('objective',@isstruct);
-p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x))); % number of nonlinear constraints (per stage)
-p.addParameter('nw', 0, @(x) (isnumeric(x) && x>=0)); % known disturbance dimension
-p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && ( (x > 0) && (x < 1)) )); % Armijo line search step parameter
-p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of iter
-p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && x>0 && mod(x,1) == 0)); % max number of line search iterations
-p.addParameter('eps', 1e-3, @(x)(isnumeric(x) && x >= eps)); % tolerance
-p.addParameter('tolLs', 1e-4, @(x)(isnumeric(x) && x >= eps)); % line search min progress
-p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
-p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
-p.addParameter('inline', '', @ischar);
-p.addParameter('name', 'my_code', @ischar);
-p.addParameter('names', defaultNames, @isstruct); % Internal naming
-p.addParameter('buildTypes', {'mex'}, @(x)(iscell(x) && all(cellfun(@(c)(any(strcmp(c, {'mex', 'simulink', 'production'}))), x))));
-p.addParameter('compile', true, @islogical);
-p.addParameter('gendir', '', @ischar);
-p.addParameter('verbose', 0, @isnumeric);
-p.addParameter('test', 0, @isnumeric);
-p.addParameter('debug', 1, @(x)(isnumeric(x) && x >= 0));
-p.addParameter('Jac_x_static',false,@islogical);
-p.addParameter('Jac_u_static',false,@islogical);
-p.addParameter('Jac_x_struct',Inf,@isnumeric);
-p.addParameter('Jac_u_struct',Inf,@isnumeric);
-p.addParameter('Jac_m_struct',Inf,@isnumeric);
-p.addParameter('Jac_n_struct',[],@isnumeric);
-p.addParameter('K_n',{},@iscell);
-p.addParameter('merit_function', 0, @(x)( (x == 1)|| (x == 2) ) || ((x == Inf) || (x == 0)));
-p.addParameter('contractive', false, @islogical);
-p.addParameter('terminal', false, @islogical);
-p.addParameter('box_lowerBound', [], @isnumeric);
-p.addParameter('box_upperBound', [], @isnumeric);
-p.addParameter('constraints_handle', [], @(x) (iscell(x) || isa(x,'function_handle')));
-p.addParameter('gradients', 'casadi', @(x)(ischar(x)));
-p.addParameter('external_jacobian_x', [], @(x)isa(x,'function_handle'));
-p.addParameter('external_jacobian_u', [], @(x)isa(x,'function_handle'));
-p.addParameter('external_jacobian_n', [], @(x)isa(x,'function_handle'));
-p.addParameter('variable_stepSize',{},@isstruct);
-p.addParameter('cost',[],@(x)isa(x,'function_handle'));
-p.addParameter('cost_N',[],@(x)isa(x,'function_handle'));
-p.parse(varargin{:});
-o = p.Results;
+    gradientTypes = {'matlab', 'casadi', 'ccode', 'manual'};
+    indentTypes = {'generic', 'data', 'code'};
+    defaultNames = struct('maximumIterations', 'maximumIterations', ...
+                          'maximumLineSearchIterations', 'maximumLineSearchIterations', ...
+                          'lineSearchAlphaMax', 'lineSearchAlphaMax', ...
+                          'lineSearchAlphaMin', 'lineSearchAlphaMin', ...
+                          'lineSearchAlphaTol', 'lineSearchAlphaTol', ...
+                          'lineSearchAlphaTolSq', 'lineSearchAlphaTolSq', ...
+                          'lineSearchAlphaSqTol', 'lineSearchAlphaSqTol', ...
+                          'lineSearchAlphaSqTolSq', 'lineSearchAlphaSqTolSq', ...
+                          'KKTOptimalityTolerance', 'KKTOptimalityTolerance', ...
+                          'KKTOptimalityToleranceSq', 'KKTOptimalityToleranceSq');
+    
+    p = inputParser;
+    % Required inputs
+    p.addRequired('dynamics', @(x)(isa(x,'function_handle')));
+    p.addRequired('N', @(x)(isnumeric(x) && numel(x) == 1 && x > 0 && mod(x,1) == 0)); % prediction horizon
+    p.addRequired('nx', @(x)(isnumeric(x) && numel(x) == 1 && x > 0 && mod(x,1) == 0)); % state dimension
+    p.addRequired('nu', @(x)(isnumeric(x) && numel(x) == 1 && x > 0 && mod(x,1) == 0)); % input dimension
+    p.addRequired('objective', @isstruct);
+    % Optional inputs: 0) General settings
+    p.addParameter('verbose', 0, @isnumeric);
+    p.addParameter('test', 0, @isnumeric);
+    p.addParameter('debug', 1, @isnumeric);
+    % Optional inputs: 1) Problem constraints
+    p.addParameter('lb', [], @isnumeric);
+    p.addParameter('ub', [], @isnumeric);
+    p.addParameter('constraints', {}, @(x) (iscell(x) || isa(x,'function_handle')));
+    p.addParameter('nn', 0, @(x) (isnumeric(x) || iscell(x)));
+    p.addParameter('terminal', false, @(x)(islogical(x) && numel(x) == 1));
+    p.addParameter('contractive', false, @(x)(islogical(x) && numel(x) == 1));
+        % Depricated options
+        p.addParameter('box_lowerBound', [], @isnumeric); % Kept for legacy purposes, proper option is 'lb'
+        p.addParameter('box_upperBound', [], @isnumeric); % Kept for legacy purposes, proper option is 'ub'
+        p.addParameter('constraints_handle', [], @(x) (iscell(x) || isa(x,'function_handle'))); % Kept for legacy purposes, proper option is 'constraints'
+    % Optional inputs: 2) Parameters/known disturbances
+    p.addParameter('nw', 0, @(x) (isnumeric(x) && numel(x) == 1 && x>=0 && mod(x,1) == 0)); % Dimension of parameter/known disturbance
+    % Optional inputs: 3) Code generation settings
+    p.addParameter('name', 'my_code', @ischar);
+    p.addParameter('gendir', './', @ischar);
+    p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
+    p.addParameter('buildTypes', {'mex'}, @(x)(iscell(x) && all(cellfun(@(c)(any(strcmp(c, {'mex', 'simulink', 'production'}))), x))));
+    p.addParameter('compile', true, @islogical);
+    p.addParameter('gradients', 'matlab', @(x)(ischar(x) && any(strcmp(x, gradientTypes))));
+    p.addParameter('external', struct(), @isstruct);
+        % Depricated options
+        p.addParameter('external_jacobian_x', [], @(x)isa(x,'function_handle')); % Kept for legacy purposes, proper option is 'external' with external.manual.jacobian_x
+        p.addParameter('external_jacobian_u', [], @(x)isa(x,'function_handle')); % Kept for legacy purposes, proper option is 'external' with external.manual.jacobian_u
+        p.addParameter('external_jacobian_n', [], @(x)isa(x,'function_handle')); % Kept for legacy purposes, proper option is 'external' with external.manual.jacobian_n
+        p.addParameter('Jac_x_static',[],@islogical); % Kept for legacy purposes, proper option is 'external' with external.ccode.jacobian_x.static
+        p.addParameter('Jac_u_static',[],@islogical); % Kept for legacy purposes, proper option is 'external' with external.ccode.jacobian_u.static
+        p.addParameter('Jac_x_struct',[],@isnumeric); % Kept for legacy purposes, proper option is 'external' with external.ccode.jacobian_x.structure
+        p.addParameter('Jac_u_struct',[],@isnumeric); % Kept for legacy purposes, proper option is 'external' with external.ccode.jacobian_u.structure
+        p.addParameter('Jac_n_struct',[],@isnumeric); % Kept for legacy purposes, proper option is 'external' with external.ccode.jacobian_n.structure
+        p.addParameter('K_n',{},@iscell); % Kept for legacy purposes, proper option is 'external' with external.ccode.K_n
+    p.addParameter('names', defaultNames, @isstruct); % Internal naming
+    p.addParameter('indent', struct('code', '', 'data', '', 'generic', '\t' ), @(x)(ischar(x) || (isstruct(x) && isfield(x, 'generic') && all(cellfun(@(y)(~isfield(x, y) || ischar(x.(y))), indentTypes)))));
+    p.addParameter('inline', '', @ischar);
+    % Optional inputs: 4) Algorithm parameters
+    p.addParameter('eps', 1e-3, @(x)(isnumeric(x) && numel(x) == 1 && x >= eps)); % tolerance
+    p.addParameter('maxIt', 4000, @(x)(isnumeric(x) && numel(x) == 1 && x>0 && mod(x,1) == 0)); % max number of iter
+    p.addParameter('maxItLs', 10, @(x)(isnumeric(x) && numel(x) == 1 && x>0 && mod(x,1) == 0)); % max number of line search iterations
+    p.addParameter('variable_stepSize', struct(), @isstruct);
+    p.addParameter('merit_function', 0, @(x)( isnumeric(x) && numel(x) == 1 && (x == 1 || x == 2 || x == Inf || x == 0)));
+    p.addParameter('parLs', 0.3, @(x)(isnumeric(x) && numel(x) == 1 && x > 0 && x < 1)); % Armijo line search step parameter
+    p.addParameter('tolLs', 1e-4, @(x)(isnumeric(x) && numel(x) == 1 && x >= eps)); % line search min progress
+    p.parse(varargin{:});
+    o = p.Results;
+    
+    % TODO this also requires YALMIP, need to check and throw an error early!
 
-%% Processing options
-% Dimensions
-if isfield(o.objective,'Q')
-    o.Q = o.objective.Q;
-    if size(o.Q,1) ~= o.nx
-        error('Q matrix must be of dimension nx');
-    end
-else
-    o.Q = [];
-end
-if isfield(o.objective,'R')
-    o.R = o.objective.R;
-    if size(o.R,1) ~= o.nu
-        error('R matrix must be of dimension nu');
-    end
-else
-    o.R = [];
-end
-if isfield(o.objective,'P')
-    o.P = o.objective.P;
-    if size(o.P,1) ~= o.nx
-        error('P matrix must be of dimension nx');
-    end
-else
-    o.P = [];
-end
-
-if (max(max(o.Jac_x_struct)) == Inf)
-    o.Jac_x_struct = reshape(1:o.nx*o.nx,o.nx,o.nx)';
-end
-if (max(max(o.Jac_u_struct)) == Inf)
-    o.Jac_u_struct = reshape(1:o.nx*o.nu,o.nu,o.nx)';
-end
-
-if (~isempty(o.Jac_n_struct))&&(max(size( o.Jac_n_struct) ~= [o.nu,o.nn]))
-    error(['Jac_n_struct must be of size [%d, %d]' '\n'], o.nu,o.nn);
-end
-
-if min(size(o.Jac_x_struct)== [o.nx,o.nx]) == 0
-    error('Jacobian x structure must be [nx,nx]');
-end
-if min(size(o.Jac_u_struct)== [o.nx,o.nu]) == 0
-    error('Jacobian u structure must be [nx,nu]');
-end
-
-if (o.terminal && o.contractive)
-    error('Cannot have both contractive and terminal constraint');
-end
-
-% Check names
-fields = fieldnames(defaultNames);
-for f=1:length(fields)
-    % Set defaults
-    if ~isfield(o.names, fields{f})
-        o.names.(fields{f}) = defaultNames.(fields{f});
-    end
-end
-if ~any(strcmp('prefix', fields))
-    o.names.prefix = [o.name '_'];
-end
-for f=1:length(fields)
-    % Add prefix
-    if ~strcmp(fields{1}, 'prefix')
-        o.names.(fields{f}) = [o.names.prefix o.names.(fields{f})];
-    end
-end
-o.names.fun = o.name;
-
-%% check objective fields
-if isfield( o.objective,'nonlinear')
-    if isa(o.objective.nonlinear,'function_handle')
-        if nargin(o.objective.nonlinear)~=2
-            error('check paramters of objective.nonlinear function. Must be (x,u)')
-        end
-    else
-        error('objective.nonlinear field must be a function handle')
-    end
-end
-if isfield( o.objective,'nonlinearN')
-    if isa(o.objective.nonlinearN,'function_handle')
-        if nargin(o.objective.nonlinearN)~=1
-            error('check paramters of objective.nonlinearN function. Must be (x)')
-        end
-    else
-        error('objective.nonlinearN field must be a function handle')
-    end
-end
-if isfield( o.objective,'trackReference')
-    if ~islogical(o.objective.trackReference)
-        error('objective.trackReference field can be true or false')
-    end
-else
-    o.objective.trackReference = false;
-end
-%% lower and upper bounds
-one_lowerBound = false;
-if ( ~isempty(o.box_lowerBound))
-    % transform o.box_lowerBound in a matrix of dims (o.nu,o.N), with -Inf where no bound is given
-    % flag one_lowerBound = true if only one lower bound
-    if( any(size(o.box_lowerBound)~=[1,o.nu])&& any(size(o.box_lowerBound)~=[o.nu,1])&& ...
-            any(size(o.box_lowerBound)~=[o.nu, o.N])&& any(size(o.box_lowerBound)~=[o.N,o.nu]))
-        error('box_lowerBound must be either empty (no lower bounds), of dimension [nu,1] (time invariant lower bounds) or [nu, N] (stage dependent lower bounds)')
-    end
-    if min(size(o.box_lowerBound)==[o.nu,1])
-        one_lowerBound = true;
-        o.box_lowerBound = repmat(o.box_lowerBound,1,o.N);
-    end
-    if min(size(o.box_lowerBound)==[1,o.nu])
-        one_lowerBound = true;
-        o.box_lowerBound = repmat(o.box_lowerBound',1,o.N);
-    end
-    if min(size(o.box_lowerBound)==[o.N,o.nu])
-        o.box_lowerBound = o.box_lowerBound';
-    end
-else
-    one_lowerBound = true;
-    o.box_lowerBound = -Inf(o.nu,o.N);
-end
-
-one_upperBound = false;
-if ( ~isempty(o.box_upperBound))
-    % transform o.box_upperBound in a matrix of dims (o.nu,o.N), with +Inf where no bound is given
-    % flag one_upperBound = true if only one upper bound
-    if( any(size(o.box_upperBound)~=[1,o.nu])&& any(size(o.box_upperBound)~=[o.nu,1])&& ...
-            any(size(o.box_upperBound)~=[o.nu, o.N])&& any(size(o.box_upperBound)~=[o.N,o.nu]))
-        error('box_upperBound must be either empty (no upper bounds), of dimension [nu,1] (time invariant upper bounds) or [nu, N] (stage dependent upper bounds)')
-    end
-    if min(size(o.box_upperBound)==[o.nu,1])
-        one_upperBound = true;
-        o.box_upperBound = repmat(o.box_upperBound,1,o.N);
-    end
-    if min(size(o.box_upperBound)==[1,o.nu])
-        one_upperBound = true;
-        o.box_upperBound = repmat(o.box_upperBound',1,o.N);
-    end
-    if min(size(o.box_upperBound)==[o.N,o.nu])
-        o.box_upperBound = o.box_upperBound';
-    end
-else
-    one_upperBound = true;
-    o.box_upperBound = +Inf(o.nu,o.N);
-end
-
-% check feasibility of the constraints
-for jj=1:o.N
-    for ii=1:o.nu
-        if o.box_lowerBound(ii,jj) > o.box_upperBound(ii,jj)
-            if (one_lowerBound)&&(one_upperBound)
-                error('box_lowerBound > box_upperBound');
-            else
-                error('box_lowerBound > box_upperBound at stage %i', jj);
-            end
-        elseif o.box_lowerBound(ii,jj) == o.box_upperBound(ii,jj)
-            error('The case of box_lowerBound = box_upperBound is not implemented yet. Please make sure that box_lowerBound < box_upperBound');
-        end
-    end
-end
-
-if min(min(isinf(o.box_lowerBound))) && min(min(isinf(o.box_upperBound))) && isempty(o.constraints_handle) && ~o.contractive && ~o.terminal
-    error('Unconstrained problems are not implemented yet. Please include at least one constraint');
-end
-
-o.K_amu = detect_structure( o.box_lowerBound);
-cons_lb = ~isinf(o.box_lowerBound);
-o.K_lb = detect_structure( cons_lb(:,sum(cons_lb,1) >= 1) );
-o.K_umb = detect_structure( o.box_upperBound );
-cons_ub = ~isinf(o.box_upperBound);
-o.K_ub = detect_structure( cons_ub(:,sum(cons_ub,1) >= 1) );
-
-
-%% nonlinear constraint handle
-
-if (any(size(o.constraints_handle)~= [1,o.N])&&any(size(o.constraints_handle)~= [o.N,1]))&&...
-        (~isempty(o.constraints_handle)&&any(size(o.constraints_handle)~= [1,1]))
-    error('constraints_handle must be either empty, or a function handle, or a cell of function handles of dimension [N,1]');
-end
-if length(o.constraints_handle) >1
-    for ii=1:o.N
-        if ~isa(o.constraints_handle{ii},'function_handle')
-            error('constraints_handle{%i} is not a function handle', ii);
-        end
-    end
-end
-if min(size(o.constraints_handle)== [o.N,1])&&o.N~=1
-    o.constraints_handle = o.constraints_handle';
-elseif min(size(o.constraints_handle)== [1,1])
-    if iscell(o.constraints_handle)
-        o.constraints_handle = repmat(o.constraints_handle,1,o.N);
-    else
-        o.constraints_handle = repmat({o.constraints_handle},1,o.N);
-    end
-    o.K_n = {1:o.N};
-end
-
-if min(size(o.external_jacobian_n)== [o.N,1])&& isequal(o.gradients,'manual')
-    o.external_jacobian_n = o.external_jacobian_n';
-elseif min(size(o.external_jacobian_n)== [1,1])&& isequal(o.gradients,'manual')
-    if iscell(o.external_jacobian_n)
-        o.external_jacobian_n = repmat(o.external_jacobian_n,1,o.N);
-    else
-        o.external_jacobian_n = repmat({o.external_jacobian_n},1,o.N);
-    end
-    o.K_n = {1:o.N};
-end
-
-if ~isequal(o.gradients,'ccode')
-    if ~isempty(o.constraints_handle)&&~isempty(o.K_n)
-        o.K_n = detect_different_NLconstraints(o);
-    end
-    if isempty(o.constraints_handle)
-        o.K_n = [];
-    end
-end
-
-% check dims of the function handles
-if ((any(size(o.nn)~= [1,o.N]))&&(any(size(o.nn)~= [o.N,1])))&&(any(size(o.nn)~= [1,1]))
-    error('nn can either be a scalar (same nonlinear constraint for every stage) or a vector of dims [N,1] (variable nonlinear constraint)');
-elseif min(size(o.nn) == [o.N,1])&&o.N~= 1
-    o.nn = o.nn';
-elseif min(size(o.nn) == [1,1])
-    if iscell(o.nn)
-        o.nn = repmat(o.nn, 1,o.N);
-    else
-        o.nn = repmat({o.nn}, 1,o.N);
-    end
-end
-
-% check dims of the function handles
-if ~isempty(o.K_n)&&~strcmp(o.gradients, 'ccode')
-    for ii = 1:o.N
-        test_u1 = ones(o.nu,1);
-        test_f1 = o.constraints_handle{ii}(test_u1);
-        
-        test_u2 = ones(1,o.nu);
-        test_f2 = o.constraints_handle{ii}(test_u2);
-        
-        if ((size(test_f1, 1) > 1) && (size(test_f1, 2) > 1))&&((size(test_f2, 1) > 1) && (size(test_f2, 2) > 1))
-            error('The output of the nonlinear constraint function handles must be a vector');
-        end
-        if any(test_f1(:) ~= Inf)&&(any(size(test_f1) ~= [o.nn{ii},1]) && any(size(test_f1) ~= [1,o.nn{ii}]))&&...
-                (any(size(test_f2) ~= [o.nn{ii},1]) && any(size(test_f2) ~= [1,o.nn{ii}]))
-            error('The output of the nonlinear constraint function handle %i is not of length %d',ii,o.nn{ii});
-        end
-    end
-end
-
-% check dimension of o.jac_n_struct if provided
-if ~isempty(o.Jac_n_struct)
-    if ~iscell(o.Jac_n_struct)
-        o.Jac_n_struct = repmat({o.Jac_n_struct}, 1,o.N);
-    end
-end
-
-% check external function and 'manual' gradients compatibility
-if ~strcmp(o.gradients,'manual')
-    if ~isempty(o.external_jacobian_x)
-        warning('If gradients options is not manual the parameter external_jacobian_x will not be considered');
-    elseif ~isempty(o.external_jacobian_u)
-        warning('If gradients options is not manual the parameter external_jacobian_u will not be considered');
-    elseif ~isempty(o.external_jacobian_n)
-        warning('If gradients options is not manual the parameter external_jacobian_n will not be considered');
-    end
-else
-    if isempty(o.external_jacobian_x)
-        error('external_jacobian_x option must be provided');
-    elseif isempty(o.external_jacobian_u)
-        error('external_jacobian_u option must be provided');
-    elseif isempty(o.external_jacobian_n)&&o.nn{1}>0
-        error('external_jacobian_n option must be provided');
-    end
-    if( o.nw > 0)
-        if( nargin(o.external_jacobian_x)~= 3)
-            error('Inputs of external_jacobian_x function handle must be x,u,w');
-        end
-        if( nargin(o.external_jacobian_u)~= 3)
-            error('Inputs of external_jacobian_u function handle must be x,u,w');
-        end
-    else
-        if( nargin(o.external_jacobian_x)~= 2)
-            error('Inputs of external_jacobian_x function handle must be x,u');
-        end
-        if( nargin(o.external_jacobian_u)~= 2)
-            error('Inputs of external_jacobian_u function handle must be x,u');
-        end
-    end
-    if( o.nn{1}>0)
-        for i= 1:length(o.external_jacobian_n)
-            if( nargin(o.external_jacobian_n{i})~= 1)
-                error('Inputs of external_jacobian_n function handle must be u');
-            end
-        end
-    end
-end
-
-
-% check version of toolbox for automatic generation
-switch o.gradients
-    case 'casadi'
-        import casadi.*
-        a = {which('SX.sym'),which('is_constant'),which('sparsity'),...
-            which('densify'),which('is_equal'),which('to_double')};
-        if(any(cellfun(@isempty,a)))
-            error('Check the CasaDi version or install it. Program tested with CasaDi v3.1.1')
-        end
-    case {'matlab','manual'}
-        v = ver('symbolic');
-        if( isempty(v))
-            error('Symbolic Math Toolbox not installed. Install it to continue')
-        end
-end
-
-% Indentation
-if ~isstruct(o.indent)
-    indent = o.indent;
-    o.indent = struct();
-    for i=1:length(indentTypes)
-        o.indent.(indentTypes{i}) = indent;
-    end
-end
-for i=1:length(indentTypes)
-    if ~isfield(o.indent, indentTypes{i})
-        o.indent.(indentTypes{i}) = o.indent.generic;
-    end
-    o.indent.(indentTypes{i}) = o.indent.(indentTypes{i})(:)'; % Make sure is row vector
-end
-
-
-% Types
-switch o.precision
-    case 'double'
-        o.sqrt = 'sqrt';
-        o.max = 'my_fmax';
-        o.min = 'my_fmin';
-        o.abs = 'fabs';
-        o.real = 'double';
-    case 'single'
-        o.sqrt = 'sqrtf';
-        o.max = 'my_fmaxf';
-        o.min = 'my_fminf';
-        o.abs = 'fabsf';
-        o.real = 'float';
-end
-
-
-% check 'variable_stepSize' parameter
-if isfield(o.variable_stepSize,'active')
-    if ~islogical(o.variable_stepSize.active)
-        error('''variable_stepSize.active'' must be boolean');
-    end
-else
-    % default option for variable_stepSize
-    o.variable_stepSize.active = true;
-end
-if o.variable_stepSize.active
-    % check all paramters
-    if isfield(o.variable_stepSize,'steady_state_state')
-        if any(size(o.variable_stepSize.steady_state_state)~=[o.nx,1])&& any(size(o.variable_stepSize.steady_state_state)~=[1,o.nx])
-            error('''variable_stepSize.steady_state_state'' must be of size [%i x 1]',o.nx);
-        end
-    else
-        % default value .steady_state_state
-        o.variable_stepSize.steady_state_state = zeros(o.nx,1);
-    end
-    if isfield(o.variable_stepSize,'steady_state_input')
-        if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,1])&& any(size(o.variable_stepSize.steady_state_input)~=[1,o.nu])
-            if any(size(o.variable_stepSize.steady_state_input)~=[o.nu,o.N])||any(size(o.variable_stepSize.steady_state_input)~=[o.N,o.nu])
-                error('''variable_stepSize.steady_state_input'' must be of size [%i x 1] or [%i x %i]',o.nu,o.nu,o.N);
-            end
-        end
-    else
-        % default value .steady_state_input
-        o.variable_stepSize.steady_state_input = zeros(o.N,o.nu);
-    end
-    if isfield(o.variable_stepSize,'decrease_coeff')
-        if ~isnumeric(o.variable_stepSize.decrease_coeff)
-            error('''variable_stepSize.decrease_coeff'' must be numeric');
-        end
-        if o.variable_stepSize.decrease_coeff >= 1
-            error('''variable_stepSize.decrease_coeff'' must be smaller than 1');
-        end
-    else
-        % default value .decrease_coeff
-        o.variable_stepSize.decrease_coeff = 0.75;
-    end
-    if isfield(o.variable_stepSize,'increase_coeff')
-        if ~isnumeric(o.variable_stepSize.increase_coeff)
-            error('''variable_stepSize.increase_coeff'' must be numeric');
-        end
-        if o.variable_stepSize.increase_coeff <= 1
-            error('''variable_stepSize.increase_coeff'' must be larger than 1');
-        end
-    else
-        % default value .increase_coeff
-        o.variable_stepSize.increase_coeff = 1/o.variable_stepSize.decrease_coeff;
-    end
-    if isfield(o.variable_stepSize,'increase_threshold')
-        if ~isnumeric(o.variable_stepSize.increase_threshold)
-            error('''variable_stepSize.increase_threshold'' must be numeric');
-        end
-    else
-        % default value .increase_threshold
-        o.variable_stepSize.increase_threshold = 0.75;
-    end
-    if isfield(o.variable_stepSize,'decrease_threshold')
-        if ~isnumeric(o.variable_stepSize.decrease_threshold)
-            error('''variable_stepSize.decrease_threshold'' must be numeric');
-        end
-    else
-        % default value .decrease_threshold
-        o.variable_stepSize.decrease_threshold = 0.25;
-    end
-    if isfield(o.variable_stepSize,'alpha_max')
-        if ~isnumeric(o.variable_stepSize.alpha_max)
-            error('''variable_stepSize.alpha_max'' must be numeric');
-        end
-    else
-        if strcmp(o.gradients,'casadi')
-            % automatically compute .alpha_max
-            o.variable_stepSize.alpha_max = get_step_size(o.variable_stepSize.steady_state_state,...
-                                                            o.variable_stepSize.steady_state_input,o);
-            % check value of computed .alpha_max                                            
-            if isinf(o.variable_stepSize.alpha_max)
-                error(['error while computing ''variable_stepSize.alpha_max'', consider to manually specify the value of alpha with' ...
-                  '''variable_stepSize.alpha_max''']);
-            end
-        else
-            error(['if option variable_stepSize.active = ''true'' and option gradients ~= ''casadi'', then the option ''variable_stepSize.alpha_max'' must be specified. ' ...
-                  'Otherwise set the option gradients = ''casadi''']);
-        end
-    end
-    if isfield(o.variable_stepSize,'alpha_min')
-        if ~isnumeric(o.variable_stepSize.alpha_min)
-            error('''variable_stepSize.alpha_min'' must be numeric');
-        end
-    else
-        % default value .alpha_min 
-        o.variable_stepSize.alpha_min = 0.1*o.variable_stepSize.alpha_max;
-    end
-else
-    if ~isfield(o.variable_stepSize, 'alpha_max')
-        % default value .alpha_max in case of constant step size
-        o.variable_stepSize.alpha_max = 0.4;
-    end
-end
+    %% Processing options
+    o = falcopt.processCodeGenOptions(o, defaultNames, indentTypes);
+    
+    o.K_amu = falcopt.internal.findNInf(o.lb);
+    cons_lb = ~isinf(o.lb);
+    o.K_lb = falcopt.internal.findNInf(cons_lb(:,sum(cons_lb,1) >= 1));
+    o.K_umb = falcopt.internal.findNInf(o.ub);
+    cons_ub = ~isinf(o.ub);
+    o.K_ub = falcopt.internal.findNInf(cons_ub(:,sum(cons_ub,1) >= 1));
 
 %% Setup info
 info.names = o.names;
@@ -670,11 +271,11 @@ optCode = '';
 
 %% Generating max and min
 
-code = [code, sprintf([ o.indent.code o.real ' ' o.max '(' o.real ' x, ' o.real ' y){' '\n' ...
+code = [code, sprintf([ o.indent.code o.real ' ' o.auxFunctions.max '(' o.real ' x, ' o.real ' y){' '\n' ...
     o.indent.code o.indent.generic 'if (x < y) { return y; }' '\n' ...
     o.indent.code o.indent.generic 'else { return x; }' '\n' ...
     o.indent.code '}' '\n\n'])];
-code = [code, sprintf([ o.indent.code o.real ' ' o.min '(' o.real ' x, ' o.real ' y){' '\n' ...
+code = [code, sprintf([ o.indent.code o.real ' ' o.auxFunctions.min '(' o.real ' x, ' o.real ' y){' '\n' ...
     o.indent.code o.indent.generic 'if (x > y) { return y; }' '\n' ...
     o.indent.code o.indent.generic 'else { return x; }' '\n' ...
     o.indent.code '}' '\n\n'])];
@@ -733,10 +334,11 @@ switch o.gradients
         
     case 'ccode'
         % all functions will be provided in external_functions.c file
-        path = cd;
-        %path = [path sprintf(['\\' o.gendir])];
-        if( exist(fullfile(path, 'external_functions.c'), 'file'))
-            info.src = [info.src; {sprintf('external_functions.c')}];
+        if( exist(o.external.ccode.c, 'file'))
+            filename = strsplit(o.external.ccode.c, {'/','\'});
+            filename = filename{end};
+            copyfile(o.external.ccode.c,[o.gendir '/' filename]);
+            info.src = [info.src; {sprintf(o.external.ccode.c)}];
             % warning string construction
             string = ['Make sure you provide the following c functions:\n' ...
                 'void model_mpc(const double* x, const double* u, const double* v, double* xp)\n'];
@@ -752,33 +354,26 @@ switch o.gradients
             string = [string, 'void build_amu(const double* u, const unsigned int k, double* r)\n'];
             string = [string, 'void build_umb(const double* u, const unsigned int k, double* r)\n'];
             string = [string,'no check of dimensions, the structure of matrices must be provided in an "ordered" manner: \n'...
-                'Jac_x_struct, Jac_u_struct and Jac_n_struct parameters must be provided \n' ];
+                'external.ccode.jacobian_x, external.ccode.jacobian_u and external.ccode.jacobian_n parameters must be provided \n' ];
             warning(sprintf(string)); %#ok
             
             % add .h file to library
-            if( exist(fullfile(path, 'external_functions.h'), 'file'))
-                if ~isempty(o.gendir)
-                    libr = [libr, sprintf('#include "../external_functions.h" \n')];
-                else
-                    libr = [libr, sprintf('#include "external_functions.h" \n')];
-                end
-                info.header = [info.header; {'external_functions.h'}];
-            else
-                if ~isempty(o.gendir)
-                    libr = [libr, sprintf('#include "../external_functions.c" \n')];
-                else
-                    libr = [libr, sprintf('#include "external_functions.c" \n')];
-                end
+            if(exist(o.external.ccode.h, 'file'))
+                filename = strsplit(o.external.ccode.h, {'/','\'});
+                filename = filename{end};
+                copyfile(o.external.ccode.h,[o.gendir '/' filename]);
+                libr = [libr, sprintf(['#include "' filename '" \n'])];
+                info.header = [info.header; {filename}];
+            else % TODO including a .c file is STRANGE
+                error(['File ' o.external.ccode.h ' for gradient/jacobian computation not found.']);
             end
             data = [ data, sprintf([o.indent.data '/*static data for jacobian_u*/' '\n'...
                 o.indent.data 'static double G[%d];' '\n'],max(o.Jac_u_struct(:)))];
             data = [ data, sprintf([o.indent.data '/*static data for jacobian_x*/' '\n' ...
                 o.indent.data 'static double F[%d];' '\n'],max(o.Jac_x_struct(:)))];
         else
-            error(['file external_functions.c not found in directory ' path]);
+            error(['File ' o.external.ccode.c ' for gradient/jacobvian computation not found.']);
         end
-    otherwise
-        error(' "gradients" option can be: casadi, matlab, manual or ccode');
 end
 
 %% constraints automatic generation
@@ -852,7 +447,7 @@ else
 end
 
 % check patterns of stage constraints
-o.K_nc = detect_structure_constraints( o.nc,o );
+o.K_nc = falcopt.internal.findNInf(o.nc(1:o.N));
 
 
 %% Initialization main algorithm
@@ -954,7 +549,7 @@ else
     optCode = [optCode, sprintf([o.indent.generic  'det_x(x0,u,x);' '\n'])];
 end
 
-if isempty(o.Q)&&isempty(o.R)&&isempty(o.P)
+if isempty(o.objective.Q)&&isempty(o.objective.R)&&isempty(o.objective.P)
     [c, d, in] = general_objective_gradient_oracle(o);
     info.src = [info.src; in.src];
     info.header = [info.header; in.header];
@@ -1121,8 +716,8 @@ if o.merit_function == 0
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'dot_product_Nnc(&dm_sqr,dm,dm);' '\n',...
                                  o.indent.generic o.indent.generic o.indent.generic 'rho_hat_tmp = dm_sqr / gps_sqr;' '\n'])];
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Update the penalty parameter rho */' '\n'])];
-    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho_hat = 2.0 * ' o.sqrt '(rho_hat_tmp);' '\n'])];
-    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho = ' o.max '(2.0*rho,rho_hat);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho_hat = 2.0 * ' o.auxFunctions.sqrt '(rho_hat_tmp);' '\n'])];
+    optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'rho = ' o.auxFunctions.max '(2.0*rho,rho_hat);' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'flag_ini = 1;' '\n'])];
     optCode = [optCode, sprintf(['\n' o.indent.generic o.indent.generic o.indent.generic '/* Recompute phi0_dot */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic o.indent.generic o.indent.generic 'det_dot_phi (du,dot_J, rho, gps, mu, dm, &phi0_dot);' '\n'])];
@@ -1440,9 +1035,9 @@ if o.variable_stepSize.active
                 o.indent.generic o.indent.generic 'pred = (-t*phi0_dot);\n'...
                 o.indent.generic o.indent.generic 'rat = ared/pred ;\n'...
                 o.indent.generic o.indent.generic 'if( rat < rat_1)\n'...
-                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.max '( alpha_min, alpha*gamma_1);\n'...
+                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.auxFunctions.max '( alpha_min, alpha*gamma_1);\n'...
                 o.indent.generic o.indent.generic 'if( rat > rat_2)\n'...
-                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.min '( alpha_max, alpha*gamma_2);\n'...
+                o.indent.generic o.indent.generic o.indent.generic 'alpha = ' o.auxFunctions.min '( alpha_max, alpha*gamma_2);\n'...
                 o.indent.generic o.indent.generic 'alpha_old = alpha; \n'...
                 o.indent.generic o.indent.generic 'alpha_inverse = 1.0/alpha;\n\n'])];
 end
@@ -1512,9 +1107,9 @@ if o.debug >2
     optCode = [optCode, sprintf(['\n' o.indent.generic  '/* Assign optimality */' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic 'dot_product_Nnc(&dsl_sqr, dsl, dsl);' '\n'])];
     if o.variable_stepSize.active 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))*alpha_inverse; ' '\n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.auxFunctions.sqrt '(du_sqr + dsl_sqr))*alpha_inverse; ' '\n'])];
     else 
-        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.sqrt '(du_sqr + dsl_sqr))/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '; \n'])];
+        optCode = [optCode, sprintf([o.indent.generic '(*optimval) = (' o.auxFunctions.sqrt '(du_sqr + dsl_sqr))/' falcopt.internal.toDefineName(o.names.lineSearchAlphaMax) '; \n'])];
     end
     optCode = [optCode, sprintf([o.indent.generic '(*feasval) = constr_viol; ' '\n'])];
     optCode = [optCode, sprintf([o.indent.generic '(*meritval) = phi0_dot; ' '\n'])];
@@ -1568,18 +1163,7 @@ if any(strcmp('mex', o.buildTypes))
     else
         name = o.name;
     end
-    if ~isempty(o.gendir)
-        if (o.gendir(end) == '/')||(o.gendir(end) == '\')
-            o.gendir = o.gendir(1:end-1);
-        end
-        file_folder = o.gendir;
-        if exist(file_folder, 'dir')~=7
-            mkdir(file_folder);
-        end
-        filename = [file_folder '/' name '.c'];
-    else
-        filename = [name '.c'];
-    end
+    filename = [o.gendir '/' name '.c'];
     ext_file = [];
     for k = 1:length(info.src)
         ext_file = [ext_file, ' ', info.src{k}]; %#ok
@@ -1609,18 +1193,7 @@ end
 % Generate production code
 if any(strcmp('production', o.buildTypes))
     production_code = [copyright  '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode];
-    if ~isempty(o.gendir)
-        if (o.gendir(end) == '/')||(o.gendir(end) == '\')
-            o.gendir = o.gendir(1:end-1);
-        end
-        file_folder = o.gendir;
-        if exist(file_folder, 'dir')~=7
-            mkdir(file_folder);
-        end
-        filename = [file_folder '/' o.name];
-    else
-        filename = [o.name];
-    end
+    filename = [o.gendir '/' o.name];
     ext_file = [];
     for k = 1:length(info.src)
         ext_file = [ext_file, ' ', info.src{k}]; %#ok
@@ -1645,11 +1218,7 @@ if any(strcmp('simulink', o.buildTypes))
                             'type', o.real, 'debug', o.debug, ...
                             'maskImage_name','+falcopt\simulinkMask_logo.png');
     simulink_code = [copyright '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode '\n' simulink_fcn];
-    if ~isempty(o.gendir)
-        name = sprintf([o.gendir '/simulink_' o.name '.c']);
-    else
-       name = sprintf(['simulink_' o.name '.c']);
-    end
+    name = sprintf([o.gendir '/simulink_' o.name '.c']);
     f = fopen(name, 'w+');
     fprintf(f, simulink_code);
     fclose(f);
@@ -1693,10 +1262,9 @@ p.parse(varargin{:});
 o = p.Results.o;                                                                
 f = p.Results.f;                                                                 
 fName = p.Results.fname; 
-import casadi.*
-x = SX.sym('x',o.nx);
-u = SX.sym('u',o.nu);
-w = SX.sym('w',o.nw);
+x = casadi.SX.sym('x',o.nx,1);
+u = casadi.SX.sym('u',o.nu,1);
+w = casadi.SX.sym('w',o.nw,1);
 
 data = [];
 code = [];
@@ -1729,7 +1297,7 @@ if( isnumeric(y))&&(~isempty(p.Results.staticName))   % generate static data if 
     info.y.flops = 0;
 else
     [~,in_y] = falcopt.casadi2struct( y, 'structure', p.Results.structure,'errorName',fName);
-    y_f = Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
+    y_f = casadi.Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
     info.sxfcn{1} = y_f;
    
     info.y.flops =  y_f.getAlgorithmSize(); %flops
@@ -1804,7 +1372,7 @@ for k = 1:length(p.Results.jac)
         end
         info.(struct_name).struct.structure = in;
     else
-        jac = Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
+        jac = casadi.Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
         info.sxfcn{length(info.sxfcn)+1} =  jac; 
         
         % wrapper jacobian
@@ -1850,112 +1418,24 @@ end
 
 end
 
-function K = detect_structure ( ind )
-% ind is a matrix of bools of dims (nu, N)
+function [src,header] = generate_casadi_c(o, fileName, fcns)
+    % given functions 'fcns' generate c code using casadi in the give 'fileName'
+    % returns name of .c src file and .h header file
+    C = casadi.CodeGenerator(fileName, struct('with_header',true,'real_t',o.real));
 
-n = size(ind,2);
-indices = nan (1,n);
-i = 1;
-K = {};
-
-while any(isnan(indices))
-    k = find(isnan(indices),1,'first');
-    I = all(repmat(ind(:,k),1,n) == ind ,1);
-    A = find(I);
-    indices(A) = 0;
-    if any(sum(~isinf(ind(:,A)),1) >= 1)
-        K{i} = A(sum(~isinf(ind(:,A)),1) >= 1); %#ok
-    end
-    i = i+1;
-end
-
-% if any(size(K))==0
-%     K = {};
-% end
-
-end
-
-function K = detect_different_NLconstraints(o)
-
-indices = nan (1,o.N);
-i = 1;
-while any(isnan(indices))
-    K{i} = []; %#ok
-    k_all = find(isnan(indices));
-    k = k_all(1);
-    %k = find(isnan(indices),1,'first');
-    for j = k_all
-        if isequal(o.constraints_handle{k},o.constraints_handle{j})
-            K{i} = [K{i},j];
+    for k = 1:length(fcns)
+        if( ~isempty(fcns{k}))
+            C.add(fcns{k})
         end
     end
-    indices(K{i}) = 0;
-    i = i+1;
-end
-
-end
-
-function K = detect_structure_constraints( ind ,o )
-% ind is a vector of bools of dims (1, N+1)
-
-ind = ind(1:o.N);
-
-indices = nan (1,o.N);
-i = 1;
-while any(isnan(indices))
-    k = find(isnan(indices),1,'first');
-    I = repmat(ind(:,k),1,o.N) == ind;
-    K{i} = find(I); %#ok
-    indices(K{i}) = 0;
-    i = i+1;
-end
-
-end
-
-function [src,header] = generate_casadi_c( o, fileName, fcns)
-% given functions 'fcns' generate c code using casadi in the give 'fileName'
-% returns name of .c src file and .h header file
-import casadi.*
-
-opts = struct('with_header',true,'real_t',o.real); % options for code generation
-
-
-
-
-C = CodeGenerator ( fileName,opts );
-
-for k = 1:length(fcns)
-    if( ~isempty(fcns{k}))
-        C.add(fcns{k})
-    end
-end
-
-
-if ~isempty(o.gendir)
-    % create folder
-    if (o.gendir(end) == '/')||(o.gendir(end) == '\')
-        o.gendir = o.gendir(1:end-1);
-    end
-    file_folder = o.gendir;
-    try
-        cd (sprintf(o.gendir));
-    catch
-        mkdir(file_folder);
-        cd (sprintf(o.gendir));
-    end
-    %     if exist(file_folder, 'dir')~=7
-    %         mkdir(file_folder);
-    %     end
-    %     cd (sprintf(o.gendir));
-    C.generate( ) ;
-    cd ..;
-    src = { sprintf([o.gendir '/%s.c'],fileName)};
-    header = { sprintf('%s.h',fileName)};
-else
+    
+    % TODO: do this without cd!!!
+    currentPath = pwd;
+    cd(sprintf(o.gendir));
     C.generate();
-    src = { sprintf('%s.c',fileName)};
-    header = { sprintf('%s.h',fileName)};
-end
+    cd(currentPath);
+    src = {[o.gendir '/' fileName '.c']};
+    header = {[fileName '.h']};
 end
 
 function [ data, code, info] = matlab_jacobians(varargin)
@@ -2064,79 +1544,79 @@ end
 
 
 function [ data, code, info] = external_jacobians(o, varargin)
-% generate c-code from provided matlab function for model_mpc, jacobian_x, jacobian_u
-code = [];
-data = [];
-info.y = [];
-info.in_F = [];
-info.in_G = [];
-x = sym('x',[o.nx,1]);
-u = sym('u',[o.nu,1]);
-w = sym('w',[o.nw,1]);
+    % generate c-code from provided matlab function for model_mpc, jacobian_x, jacobian_u
+    code = [];
+    data = [];
+    info.y = [];
+    info.in_F = [];
+    info.in_G = [];
+    x = sym('x',[o.nx,1]);
+    u = sym('u',[o.nu,1]);
+    w = sym('w',[o.nw,1]);
 
-if( o.nw>0)
-    try
-        y = o.dynamics(x,u,w);
-        jac_u = o.external_jacobian_u(x,u,w);
-        jac_x = o.external_jacobian_x(x,u,w);
-    catch
-        error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
-            'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
-    end
-else
-    try
-        y = o.dynamics(x,u);
-        jac_u = o.external_jacobian_u(x,u);
-        jac_x = o.external_jacobian_x(x,u);
-    catch
-        error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
-            'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
-    end
-end
-
-% dynamics of system
-[d, in_y] = falcopt.fcn2struct( y,o,'name','xp');
-code = [ code, sprintf('/*Dynamics of the system*/\n')];
-if( o.nw > 0)
-    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
-else
-    code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
-end
-code = [ code, d, sprintf('}\n\n')];
-info.y.flops = in_y.flops;
-
-% jacobians
-for k = 1:2
-    if(k==1)
-        jac = jac_x;
-        static_name = 'F';
-        struct_name = 'in_F';
-        J_name = 'Jacobian_x';
-    else
-        jac = jac_u;
-        static_name = 'G';
-        struct_name = 'in_G';
-        J_name = 'Jacobian_u';
-    end
-    [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
-    info.(struct_name).static = i.static;
-    data = [ data, sprintf([o.indent.generic '/*Static data for ' J_name '*/\n'])]; %#ok
-    if( info.(struct_name).static)
-        data = [data, sprintf(['\tstatic const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
-        data = [data, d, sprintf(['};\n\n'])]; %#ok
-    else
-        data = [data, sprintf(['\tstatic ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
-        code = [ code, sprintf(['/* ' J_name '*/\n'])]; %#ok
-        if( o.nw > 0)
-            code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
-        else
-            code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+    if( o.nw>0)
+        try
+            y = o.dynamics(x,u,w);
+            jac_u = o.external.manual.jacobian_u(x,u,w);
+            jac_x = o.external.manual.jacobian_x(x,u,w);
+        catch
+            error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
         end
-        code = [code, d, sprintf(['}\n\n'])]; %#ok
+    else
+        try
+            y = o.dynamics(x,u);
+            jac_u = o.external.manual.jacobian_u(x,u);
+            jac_x = o.external.manual.jacobian_x(x,u);
+        catch
+            error(['Error in converting output of ''external_jacobian'' functions into sym variables\n'...
+                'Try initialize output of these functions as sym. Example: sym(zeros(2,2)))']);
+        end
     end
-    info.(struct_name).struct.structure = i.structure;
-    info.(struct_name).flops = i.flops;
-end
+
+    % dynamics of system
+    [d, in_y] = falcopt.fcn2struct( y,o,'name','xp');
+    code = [ code, sprintf('/*Dynamics of the system*/\n')];
+    if( o.nw > 0)
+        code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, const ' o.real '* w, ' o.real '* xp){\n\n'])];
+    else
+        code = [code, sprintf(['void model_mpc(const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){\n\n'])];
+    end
+    code = [ code, d, sprintf('}\n\n')];
+    info.y.flops = in_y.flops;
+
+    % jacobians
+    for k = 1:2
+        if(k==1)
+            jac = jac_x;
+            static_name = 'F';
+            struct_name = 'in_F';
+            J_name = 'Jacobian_x';
+        else
+            jac = jac_u;
+            static_name = 'G';
+            struct_name = 'in_G';
+            J_name = 'Jacobian_u';
+        end
+        [d, i] = falcopt.fcn2struct( jac,o,'name', static_name);
+        info.(struct_name).static = i.static;
+        data = [ data, sprintf([o.indent.generic '/*Static data for ' J_name '*/\n'])]; %#ok
+        if( info.(struct_name).static)
+            data = [data, sprintf(['\tstatic const ' o.real ' ' static_name '[%i] = {\n'], i.structure.num)]; %#ok
+            data = [data, d, sprintf(['};\n\n'])]; %#ok
+        else
+            data = [data, sprintf(['\tstatic ' o.real ' ' static_name '[%i];\n'], i.structure.num)]; %#ok
+            code = [ code, sprintf(['/* ' J_name '*/\n'])]; %#ok
+            if( o.nw > 0)
+                code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, const ' o.real ' * w, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+            else
+                code = [code, sprintf(['static ' o.inline ' void ' J_name '(const ' o.real ' * x, const ' o.real ' * u, ' o.real ' * ' static_name ') {\n\n'])]; %#ok
+            end
+            code = [code, d, sprintf(['}\n\n'])]; %#ok
+        end
+        info.(struct_name).struct.structure = i.structure;
+        info.(struct_name).flops = i.flops;
+    end
 end
 
 function [ data, code, info] = generate_n_and_Dn(o,grad)
@@ -2148,10 +1628,6 @@ info.in_umb = {};
 info.in_n = {};
 info.in_Dn_n = {};
 sxfcn = {};
-
-% if ( strcmp(o.gradients,'casadi'))
-%     import casadi.*
-% end
 
 % check if there are box constraints
 % if( isempty(o.box_constraints))
@@ -2167,7 +1643,7 @@ else
 end
 %nl_con = ~isempty(o.K_n); % check if there are nonlinear constraints n(u)
 
-% if( isa(o.constraints_handle,'function_handle'))
+% if( isa(o.constraints,'function_handle'))
 %     nl_con = 1;
 % else
 %     nl_con = 0;
@@ -2176,19 +1652,18 @@ end
 % build nonlinear constraints n(u)
 switch grad
     case 'casadi'
-        import casadi.*
-        z = SX.sym('u',[o.nu,1]);
+        z = casadi.SX.sym('u',o.nu,1);
     case {'matlab','manual'}
         z = sym('u',[o.nu,1],'real');
 end
 if( nl_con)
     for jj=1:length(o.K_n)
-        if( nargin(o.constraints_handle{jj}) == 1)
+        if( nargin(o.constraints{jj}) == 1)
             try
-                n{jj} = o.constraints_handle{jj}(z); %#ok
+                n{jj} = o.constraints{jj}(z); %#ok
             catch
                 try
-                    n{jj} = o.constraints_handle{jj}(z'); %#ok
+                    n{jj} = o.constraints{jj}(z'); %#ok
                 catch
                     error('inequality constraints can depend only on inputs' );
                 end
@@ -2204,7 +1679,7 @@ end
 
 %% generate a - u functions
 for ii=1:length(o.K_amu)
-    cons_Bound = o.box_lowerBound(:,o.K_amu{ii}(1));
+    cons_Bound = o.lb(:,o.K_amu{ii}(1));
     cons_BoundTemp = diag(~isinf(cons_Bound));
     new_Identity = double(cons_BoundTemp(any(cons_BoundTemp,2),:));
     cons_Bound(isinf(cons_Bound)) = 0;
@@ -2235,7 +1710,7 @@ code = [code, sprintf([o.indent.code '}' '\n'])];
 
 %% generate u - b functions
 for ii=1:length(o.K_umb)
-    cons_Bound = o.box_upperBound(:,o.K_umb{ii}(1));
+    cons_Bound = o.ub(:,o.K_umb{ii}(1));
     cons_BoundTemp = diag(~isinf(cons_Bound));
     new_Identity = double(cons_BoundTemp(any(cons_BoundTemp,2),:));
     cons_Bound(isinf(cons_Bound)) = 0;
@@ -2264,7 +1739,7 @@ end
 code = [code, sprintf([o.indent.code '}' '\n'])];
 
 % build o.nc (constraints structure)
-info.nc = cell2mat(o.nn);
+info.nc = o.nn;
 
 
 if( o.terminal || o.contractive)
@@ -2274,8 +1749,8 @@ else
 end
 
 for i=1:o.N
-    lb = sum(~isinf(o.box_lowerBound(:,i)));
-    ub = sum(~isinf(o.box_upperBound(:,i)));
+    lb = sum(~isinf(o.lb(:,i)));
+    ub = sum(~isinf(o.ub(:,i)));
     info.nc(i) = info.nc(i)+lb+ub;
 end
 
@@ -2283,8 +1758,6 @@ end
 if( nl_con)
     switch grad
         case 'casadi' % use casadi generation
-            import casadi.*
-            
             sxfcn = {};
             
             in_n = cell(length(o.K_n));
@@ -2298,7 +1771,7 @@ if( nl_con)
                     % build_n
                     [~,in_n{jj}] = falcopt.casadi2struct( n{jj});
                     
-                    y_f{jj} = Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values});
+                    y_f{jj} = casadi.Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values});
                     
                     sxfcn{end + 1} = y_f{jj}; %#ok
                     try
@@ -2333,7 +1806,7 @@ if( nl_con)
                             data = [data, d, sprintf('\n')]; %#ok
                         end
                     else
-                        Dn_f{jj} = Function(sprintf('build_Dn_%d_casadi',jj),{z},{i.stored.values});
+                        Dn_f{jj} = casadi.Function(sprintf('build_Dn_%d_casadi',jj),{z},{i.stored.values});
                         sxfcn{end + 1} =  Dn_f{jj}; %#ok
                         
                         % wrapper build_Dn
@@ -2377,9 +1850,9 @@ if( nl_con)
                     Dn{jj} = Dn{jj}';
                 else
                     try
-                        Dn{jj} = o.external_jacobian_n{jj}(z);
+                        Dn{jj} = o.external.manual.jacobian_n{jj}(z);
                     catch
-                        error('o.external_jacobian_n function not found. Or invalid output: it should return a struct of size o.N');
+                        error('o.external.manual.jacobian_n function not found. Or invalid output: it should return a struct of size o.N');
                     end
                 end
                 [c,i] = falcopt.fcn2struct( Dn{jj}, o, 'name', 'Dn_fun');
@@ -2962,9 +2435,9 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
 nx = o.nx;
 nu = o.nu;
-Q = o.Q;
-P = o.P;
-R = o.R;
+Q = o.objective.Q;
+P = o.objective.P;
+R = o.objective.R;
 
 if ~isempty(Q)
     code = [code, sprintf(['\n' '/* It computes Q*x */' '\n'])];
@@ -3150,23 +2623,23 @@ code = [code,  sprintf(['const unsigned int nc, const unsigned int na, '...
 
 if ~isempty(o.K_lb)
     code = [code,  sprintf([o.indent.generic  'for (jj=0;jj< na;jj++){' '\n',...
-        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* amu[jj]);' '\n',...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.auxFunctions.max '(1.0, -2.0* amu[jj]);' '\n',...
         o.indent.generic o.indent.generic 'gps[jj]= amu[jj] + 0.5*sl_sqr[jj];' '\n',...
-        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.auxFunctions.sqrt '(sl_sqr[jj]);' '\n',...
         o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_ub)
     code = [code,  sprintf([o.indent.generic  'for (jj=na;jj< nb;jj++){' '\n'...
-        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* umb[jj-na]);' '\n',...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.auxFunctions.max '(1.0, -2.0* umb[jj-na]);' '\n',...
         o.indent.generic o.indent.generic 'gps[jj]= umb[jj-na] + 0.5*sl_sqr[jj];' '\n',...
-        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.auxFunctions.sqrt '(sl_sqr[jj]);' '\n',...
         o.indent.generic  '}' '\n'])];
 end
 if ~isempty(o.K_n)
     code = [code,  sprintf([o.indent.generic  'for (jj= nb;jj< nc;jj++) {' '\n'...
-        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.max '(1.0, -2.0* n[jj - nb]);' '\n',...
+        o.indent.generic o.indent.generic 'sl_sqr[jj] = ' o.auxFunctions.max '(1.0, -2.0* n[jj - nb]);' '\n',...
         o.indent.generic o.indent.generic 'gps[jj]= n[jj - nb] + 0.5*sl_sqr[jj];' '\n',...
-        o.indent.generic o.indent.generic 'sl[jj] = ' o.sqrt '(sl_sqr[jj]);' '\n',...
+        o.indent.generic o.indent.generic 'sl[jj] = ' o.auxFunctions.sqrt '(sl_sqr[jj]);' '\n',...
         o.indent.generic  '}' '\n'])];
 end
 
@@ -3177,13 +2650,13 @@ code = [code, sprintf(['\n' '/* It initialize the slack variables sl and its squ
 code = [code, sprintf([o.inline ' void initialize_slack( const ' o.real '* u' c_psi_dec c_contr_dec ', ' o.real '* sl, ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.lb))) )];
 end
 if ~isempty(o.K_ub)
-    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.ub))) )];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
+    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(o.nn) )];
 end
 
 if (o.contractive || o.terminal)
@@ -3193,8 +2666,8 @@ end
 info.flops.mul = info.flops.mul+ N*3; % mul inside only first cycle % NOT CLEAR, ToDo
 
 
-lb = sum(~isinf(o.box_lowerBound),1);
-ub = sum(~isinf(o.box_upperBound),1);
+lb = sum(~isinf(o.lb),1);
+ub = sum(~isinf(o.ub),1);
 
 for k = 1:o.N
     code = [code, sprintf(['\n'...
@@ -3225,8 +2698,8 @@ end
 
 if (o.contractive || o.terminal)
     code = [code, sprintf([o.indent.generic  'g_contr = *psi_N - c_contr;' '\n'...
-        o.indent.generic  'sl_sqr[%d] = ' o.max '(1.0, -2.0*g_contr);' '\n',...
-        o.indent.generic  'sl[%d] = ' o.sqrt '(sl_sqr[%d]);' '\n'...
+        o.indent.generic  'sl_sqr[%d] = ' o.auxFunctions.max '(1.0, -2.0*g_contr);' '\n',...
+        o.indent.generic  'sl[%d] = ' o.auxFunctions.sqrt '(sl_sqr[%d]);' '\n'...
         o.indent.generic  'gps[%d] = g_contr + 0.5*sl_sqr[%d];' '\n'],...
         sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc) - 1, sum(o.nc)-1, sum(o.nc)-1)];
     info.flops.add = info.flops.add + 1;
@@ -3263,15 +2736,15 @@ info.flops = struct('add', 0, 'mul', 0, 'inv', 0, 'sqrt', 0, 'comp', 0);
 
 % lower bounds
 for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
-    struct_mat = diag(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))));
+    struct_mat = diag(~isinf(o.lb(:,o.K_lb{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
     
     if o.variable_stepSize.active
-        M_struct = {eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))),struct_mat_cut};
+        M_struct = {eye(sum(~isinf(o.lb(:,o.K_lb{jj}(1))))),struct_mat_cut};
         M_names = {{'alpha_inv', ['I_lb_' num2str(jj)]}};
         M_static = [false,true];
     else
-        M_struct = {1/o.variable_stepSize.alpha_max*eye(sum(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))))), struct_mat_cut};
+        M_struct = {1/o.variable_stepSize.alpha_max*eye(sum(~isinf(o.lb(:,o.K_lb{jj}(1))))), struct_mat_cut};
         M_names = {{ ['alpha_inv_lb_' num2str(jj)], ['I_lb_' num2str(jj)]}};
         M_static = [true,true];
     end
@@ -3303,15 +2776,15 @@ end
 
 % upper bounds
 for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
-    struct_mat = diag(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))));
+    struct_mat = diag(~isinf(o.ub(:,o.K_ub{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
     
     if o.variable_stepSize.active
-        M_struct = {eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
+        M_struct = {eye(sum(~isinf(o.ub(:,o.K_ub{jj}(1))))), -struct_mat_cut};
         M_names = {{ 'alpha_inv', ['I_ub_' num2str(jj)]}};
         M_static = [false,true];
     else
-        M_struct = {1/o.variable_stepSize.alpha_max*eye(sum(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))))), -struct_mat_cut};
+        M_struct = {1/o.variable_stepSize.alpha_max*eye(sum(~isinf(o.ub(:,o.K_ub{jj}(1))))), -struct_mat_cut};
         M_names = {{ ['alpha_inv_ub_' num2str(jj)], ['I_ub_' num2str(jj)]}};
         M_static = [true,true];
     end
@@ -3357,11 +2830,11 @@ for jj = 1:length(o.K_n) % if o.K_n is empty, this loop is not executed
     info.flops = falcopt.internal.addFlops(info.flops, in.flops);
     
     if o.variable_stepSize.active
-        M_struct = {eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
+        M_struct = {eye(o.nn(o.K_n{jj}(1))), -eye(o.nn(o.K_n{jj}(1)))};
         M_names = {{ 'alpha_inv', ['temp_n' num2str(jj)]}};
         M_static = [false,true];
     else
-        M_struct = {1/o.variable_stepSize.alpha_max*eye(o.nn{o.K_n{jj}(1)}), -eye(o.nn{o.K_n{jj}(1)})};
+        M_struct = {1/o.variable_stepSize.alpha_max*eye(o.nn(o.K_n{jj}(1))), -eye(o.nn(o.K_n{jj}(1)))};
         M_names = {{ ['alpha_inv_n_' num2str(jj)], ['temp_n' num2str(jj)]}};
         M_static = [true,true];
     end
@@ -3422,7 +2895,7 @@ end
 
 % lower bounds
 for jj = 1:length(o.K_lb) % if o.K_lb is empty, this loop is not executed
-    struct_mat = diag(~isinf(o.box_lowerBound(:,o.K_lb{jj}(1))));
+    struct_mat = diag(~isinf(o.lb(:,o.K_lb{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
     [d, c, in] = falcopt.generateMVMult( - struct_mat_cut', ...
         'names', struct('fun', ['minus_Ina_muG_' num2str(jj)], 'M', {{['minus_Ina_' num2str(jj)]}},...
@@ -3447,7 +2920,7 @@ end
 
 %upper bounds
 for jj = 1:length(o.K_ub) % if o.K_ub is empty, this loop is not executed
-    struct_mat = diag(~isinf(o.box_upperBound(:,o.K_ub{jj}(1))));
+    struct_mat = diag(~isinf(o.ub(:,o.K_ub{jj}(1))));
     struct_mat_cut = double(struct_mat(any(struct_mat,1),:));
     [d, c, in] = falcopt.generateMVMult( struct_mat_cut', ...
         'names', struct('fun', ['Inb_muG_' num2str(jj)], 'M', {{['Inb_' num2str(jj)]}},...
@@ -3582,7 +3055,7 @@ else
         ter_struct = repmat({[]},1,o.N);
 end
 
-[c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.box_lowerBound), 'ub', ~isinf(o.box_upperBound)),  'types', o.real,'precision', o.precision, ...
+[c, in] = falcopt.generateConstraintInv(o.Jac_n_struct_hor, ter_struct, 'N', N, 'bounds', struct('lb', ~isinf(o.lb), 'ub', ~isinf(o.ub)),  'types', o.real,'precision', o.precision, ...
     'indent', o.indent, 'inline', o.inline, 'verbose', max(0,o.verbose-1), 'test', o.test);
 code = [code, c, sprintf('\n\n')];
 info.flops = falcopt.internal.addFlops(info.flops, in.flops);
@@ -3614,7 +3087,7 @@ if ~isempty(o.K_ub)
     code = [code, sprintf([o.indent.generic  o.real ' temp_ub[%i];' '\n'],o.nu)];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf([o.indent.generic  o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(cell2mat(o.nn)), o.nu)];
+    code = [code, sprintf([o.indent.generic  o.real ' temp_n[%i], temp_n2[%i];' '\n'], max(o.nn), o.nu)];
 end
 
 
@@ -3628,12 +3101,12 @@ for ii = 1:o.N
     if ~isempty(o.K_lb)
         code = [code, sprintf([o.indent.generic  'build_vNnc_lb(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
             sum(o.nc(1:ii-1)), (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)))]; %#ok
-        lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
+        lb_size = sum(~isinf(o.lb(:,ii)));
     end
     if ~isempty(o.K_ub)
         code = [code, sprintf([o.indent.generic  'build_vNnc_ub(&gps[%i], &dot_J[%i], %i, &v_Nnc[%i]);' '\n'],...
             sum(o.nc(1:ii-1)) + lb_size, (ii-1)*o.nu, ii-1, sum(o.nc(1:ii-1)) + lb_size )]; %#ok
-        ub_size = sum(~isinf(o.box_upperBound(:,ii)));
+        ub_size = sum(~isinf(o.ub(:,ii)));
     end
     if ~isempty(o.K_n)
         code = [code, sprintf([o.indent.generic  'build_Dn(&u[%d], %i, &Dn[%d]);' '\n'], (ii-1)*nu, ii-1, Dn_need)]; %#ok
@@ -3679,12 +3152,12 @@ for ii = 1:o.N
     if ~isempty(o.K_lb)
         code = [code, sprintf([o.indent.generic  'minus_Ina_muG(&muG[%i], %i, &temp_lb[0]);' '\n'],...
             sum(o.nc(1:ii-1)), ii-1)]; %#ok
-        lb_size = sum(~isinf(o.box_lowerBound(:,ii)));
+        lb_size = sum(~isinf(o.lb(:,ii)));
     end
     if ~isempty(o.K_ub)
         code = [code, sprintf([o.indent.generic  'Inb_muG(&muG[%i], %i, &temp_ub[0]);' '\n'],...
             sum(o.nc(1:ii-1)) + lb_size, ii-1)]; %#ok
-        ub_size = sum(~isinf(o.box_upperBound(:,ii)));
+        ub_size = sum(~isinf(o.ub(:,ii)));
     end
     if ~isempty(o.K_n)
         code = [code, sprintf([o.indent.generic  'Dn_times_muG_n(&Dn[%i], &muG[%i], %i, &temp_n2[0]);' '\n'],...
@@ -3781,13 +3254,13 @@ code = [code, sprintf([o.inline ' void build_gpsl(const ' o.real '* u' c_psi_dec
     c_contr_dec ', const ' o.real '* sl_sqr, ' o.real '* gps){' '\n\n'])];
 
 if ~isempty(o.K_lb)
-    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.box_lowerBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' amu[%d];' '\n'], max(sum(~isinf( o.lb))) )];
 end
 if ~isempty(o.K_ub)
-    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.box_upperBound))) )];
+    code = [code, sprintf([o.indent.generic   o.real ' umb[%d];' '\n'], max(sum(~isinf( o.ub))) )];
 end
 if ~isempty(o.K_n)
-    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(cell2mat(o.nn)) )];
+    code = [code, sprintf([o.indent.generic   o.real ' n[%d];' '\n'], max(o.nn) )];
 end
 
 if (o.contractive || o.terminal)
@@ -3798,8 +3271,8 @@ end
 info.flops.mul = info.flops.mul+ N*3; % mul inside only first cycle % NOT CLEAR, ToDo
 
 
-lb = sum(~isinf(o.box_lowerBound),1);
-ub = sum(~isinf(o.box_upperBound),1);
+lb = sum(~isinf(o.lb),1);
+ub = sum(~isinf(o.ub),1);
 
 for k = 1:o.N
     code = [code, sprintf(['\n',...
@@ -4061,7 +3534,7 @@ if o.merit_function ~= 2
         o.indent.generic  o.real ' norm = 0.0;' '\n\n',...
         o.indent.generic  'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
     
-    code = [code, sprintf([o.indent.generic o.indent.generic 'norm += ' o.abs '(g[ii]);' '\n',...
+    code = [code, sprintf([o.indent.generic o.indent.generic 'norm += ' o.auxFunctions.abs '(g[ii]);' '\n',...
         o.indent.generic  '}' '\n',...
         o.indent.generic  'return norm;' '\n',...
         '}' '\n\n'])];
@@ -4072,7 +3545,7 @@ if o.merit_function ~= 2
         o.indent.generic  o.real ' norm = 0.0;' '\n\n',...
         o.indent.generic  'for (ii = %d; ii-- >0; ){' '\n'],sum(o.nc))];
     
-    code = [code, sprintf([o.indent.generic o.indent.generic 'norm = ' o.max '(norm,' o.abs '(g[ii]));' '\n',...
+    code = [code, sprintf([o.indent.generic o.indent.generic 'norm = ' o.auxFunctions.max '(norm,' o.auxFunctions.abs '(g[ii]));' '\n',...
         o.indent.generic  '}' '\n',...
         o.indent.generic  'return norm;' '\n',...
         '}' '\n\n'])];
@@ -4168,7 +3641,7 @@ elseif o.merit_function == 2
     info.flops.it.comp = info.flops.it.comp+ sum(o.nc); %flops of abs in one_norm
 end
 
-code = [code, sprintf([o.indent.generic  '(*rho) = ' o.max '( (*rho), (*rho_hat)); ' '\n'])];
+code = [code, sprintf([o.indent.generic  '(*rho) = ' o.auxFunctions.max '( (*rho), (*rho_hat)); ' '\n'])];
 info.flops.it.comp = info.flops.it.comp+ 1;
 
 code = [code, sprintf(['}' '\n\n' ])];
@@ -4230,7 +3703,7 @@ info.flops.div = info.flops.div +1;
 % code = [code, sprintf([o.indent.code o.indent.generic 'a = 0.1*t_u;'
 % '\n'])]; % TBD
 % info.flops.mul = info.flops.mul+1;
-code = [code, sprintf([o.indent.code o.indent.generic 'return ' o.max '(' o.min '(t_theo,' falcopt.internal.num2str(p.tau(2), o.precision) '*t_u), ' falcopt.internal.num2str(p.tau(1), o.precision) '*t_u);' '\n'])];
+code = [code, sprintf([o.indent.code o.indent.generic 'return ' o.auxFunctions.max '(' o.auxFunctions.min '(t_theo,' falcopt.internal.num2str(p.tau(2), o.precision) '*t_u), ' falcopt.internal.num2str(p.tau(1), o.precision) '*t_u);' '\n'])];
 info.flops.mul = info.flops.mul+2;
 info.flops.add = info.flops.add+1;
 info.flops.comp = info.flops.comp+ 3;
@@ -4245,97 +3718,11 @@ code = [code, sprintf([o.indent.code o.inline ' ' o.real ' compute_max_Nnc( cons
     o.indent.code o.indent.generic 'unsigned int ii = 0;' '\n',...
     o.indent.code o.indent.generic o.real ' m = -100.0;' '\n' '\n'])];
 code = [code, sprintf([o.indent.code o.indent.generic 'for (ii=%d; ii--; ) {' '\n'],sum(o.nc))];
-code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'm = ' o.max '(m,x[ii]);' '\n' ...
+code = [code, sprintf([o.indent.code o.indent.generic o.indent.generic 'm = ' o.auxFunctions.max '(m,x[ii]);' '\n' ...
     o.indent.code o.indent.generic '}' '\n' ...
     o.indent.code o.indent.generic 'return m;' '\n' ...
     o.indent.code '}'])];
 info.flops.comp = sum(o.nc);
-end
-
-function alpha_opt = get_step_size(x0,u_ref,o)
-% this function works only with CasADi tool
-
-% check dimensions inputs
-if all(size(u_ref) == [o.nu,1])
-    u_ref = repmat(u_ref',o.N,1);
-elseif all(size(u_ref) == [1,o.nu])
-    u_ref = repmat(u_ref,o.N,1);
-end
-
-if all(size(x0) == [1,o.nx])
-    x0 = x0';
-end
-
-if o.nw > 0
-    w_ref = zeros(o.nw,1);
-end
-
-import casadi.*
-x = SX.sym('x',o.nx);
-u = SX.sym('u',o.nu);
-u_n =  SX.sym('u_n',o.N,o.nu);
-psi = SX.sym('psi',o.N,o.nx);
-J = SX.sym('J',1);
-
-% define function
-if o.nw > 0
-    w = SX.sym('u',o.nw);
-    dynamics = Function('y_fun',{x,u,w},{o.dynamics(x,u,w)});
-else
-    dynamics = Function('y_fun',{x,u},{o.dynamics(x,u)});
-end
-
-% define psi as function of x0 and u
-if o.nw > 0
-    for i=1:o.N
-        if i==1
-            psi(i,:) = dynamics(x,u_n(1,:),w);
-        else
-            psi(i,:) = dynamics(psi(i-1,:),u_n(i,:),w);
-        end
-    end
-else
-    for i=1:o.N
-        if i==1
-            psi(i,:) = dynamics(x,u_n(1,:));
-        else
-            psi(i,:) = dynamics(psi(i-1,:),u_n(i,:));
-        end
-    end
-end
-
-% define cost J
-if isfield(o.objective,'nonlinear')
-    for k = 1:o.N-1
-        J = J + o.objective.nonlinear(psi(k,:)',u_n(k,:)');
-    end
-    if isfield(o.objective,'nonlinearN')
-        J = J + o.objective.nonlinearN(psi(end,:)');
-    end
-else
-    for k = 1:o.N-1
-        J = J + 0.5*(psi(k,:)*o.Q*psi(k,:)' + u_n(k,:)*o.R*u_n(k,:)');
-    end
-    J = J + 0.5*(psi(end,:)*o.Q*psi(end,:)');
-end
-
-% compute Hessian
-try 
-    HJ = hessian(J,u_n);
-catch
-    error(['error while computing variable_stepSize.alpha_max, consider to set '...
-           'manualy a value for it']);
-end
-
-% find alpha max
-if o.nw > 0
-    HJ_fun = Function('HJ_fun',{x,u_n,w},{HJ});
-    alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref,w_ref))));
-else
-    HJ_fun = Function('HJ_fun',{x,u_n},{HJ});
-    alpha_opt = 1/max(eig(full(HJ_fun(x0,u_ref))));
-end
-    
 end
 
 function [code, data, info] = general_objective_gradient_oracle(o)
@@ -4392,7 +3779,6 @@ c_psi_dot_dec = argument_def_internal_psi_dot_noconst(o,true);
 % generate cost and cost_N functions + Jacobians
 switch o.gradients
     case 'casadi'
-        import casadi.*
         sxfcn = {}; %#ok
         
         % generate cost, cost_x, cost_u
