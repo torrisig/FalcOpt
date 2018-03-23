@@ -879,11 +879,7 @@ function [data, code, info] = generateMVMult(varargin)
             Ms = {};
             for j=1:dims.l
                 if ~options.static.M(j)
-                    if ~options.transpose(j)
-                        Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)}]; %#ok
-                    else
-                        Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)'}]; %#ok
-                    end
+                    Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)}]; %#ok
                 end
             end
             ms = {};
@@ -893,7 +889,15 @@ function [data, code, info] = generateMVMult(varargin)
                 end
             end
             % Compute r using code-generated function
-            eval(['rs = ' names.fun '_mex(vs{:}, Ms{:}, ms{:});']);
+            funstr = ['rs = ' names.fun '_mex(vs{:}'];
+            if ~all(options.static.M)
+                funstr = [funstr ', Ms{:}'];
+            end
+            if ~all(options.static.m)
+                funstr = [funstr ', ms{:}'];
+            end
+            funstr = [funstr ');'];
+            eval(funstr);
             % Compute correct value
             r = zeros(dims.m,1);
             idx = 1;
@@ -902,9 +906,9 @@ function [data, code, info] = generateMVMult(varargin)
                     r = r + M{j}*vs{j};
                 else
                     if ~options.transpose(j)
-                        r = r + Ms{idx}*vs{j};
+                        r = r + options.scale.M(j)*Ms{idx}*vs{j};
                     else
-                        r = r + Ms{idx}'*vs{j};
+                        r = r + options.scale.M(j)*Ms{idx}'*vs{j};
                     end
                     idx = idx+1;
                 end
