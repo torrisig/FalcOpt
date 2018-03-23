@@ -443,7 +443,7 @@ function [code, info] = generateInverse(varargin)
             eval(['Mis = ' names.fun '_mex(Ms);']);
             % Compute correct value
             Mi = inv(Ms);
-            if isnan(norm(Mi-Mis,inf)) || norm(Mi-Mis,inf) > options.epsFactor*eps(options.types.data)
+            if isnan(norm(Mi-Mis,inf)) || norm(Mi-Mis,inf) > options.epsFactor*eps(options.precision)
                 errors = errors + 1;
                 maxError = max(maxError, norm(Mi-Mis,inf));
             end
