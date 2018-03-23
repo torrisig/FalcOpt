@@ -66,9 +66,9 @@ function options = processCodeGenOptions(options, defaultNames, indentTypes)
         end
     end
     if isfield(options.objective, 'nonlinearN')
-        if ~isa(options.objective.nonlinear, 'function_handle')
+        if ~isa(options.objective.nonlinearN, 'function_handle')
             throw(MException([functionId ':InvalidObjective'], 'The nonlinear objective function objective.nonlinearN must be a function handle.'));
-        elseif nargin(options.objective.nonlinear) ~= 1
+        elseif nargin(options.objective.nonlinearN) ~= 1
             throw(MException([functionId ':InvalidObjective'], 'The nonlinear objective function objective.nonlinearN must have one input (x).'));
         end
     end

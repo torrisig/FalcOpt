@@ -74,7 +74,7 @@ function alpha_opt = computeStepSize(x0, u_ref, o)
     % define cost J
     if isfield(o.objective,'nonlinear')
         for k = 1:o.N-1
-            J = J + o.objective.nonlinear(psi(:,k),u_n(k,:));
+            J = J + o.objective.nonlinear(psi(:,k),u_n(:,k));
         end
         if isfield(o.objective,'nonlinearN')
             J = J + o.objective.nonlinearN(psi(:,end));
