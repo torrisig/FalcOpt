@@ -686,9 +686,9 @@ function [data, code, info] = generateMVMult(varargin)
                          ' ***************/' '\n']);
         fprintf(f, data);
         % Code generated function
-        fprintf(f, ['\n' '/***************************' '\n' ...
-                         ' * Code-generated Function *' '\n' ...
-                         ' ***************************/' '\n']);
+        fprintf(f, ['\n' '\n' '/***************************' '\n' ...
+                              ' * Code-generated Function *' '\n' ...
+                              ' ***************************/' '\n']);
         fprintf(f, [code '\n']);
         % Auxiliary functions
         fprintf(f, ['\n' '/***********************' '\n' ...
@@ -916,9 +916,9 @@ function [data, code, info] = generateMVMult(varargin)
             idx = 1;
             for j=1:dims.k
                 if options.static.m(j)
-                    r = r + m{j};
+                    r = r + options.scale.m(j)*m{j};
                 else
-                    r = r + ms{idx};
+                    r = r + options.scale.m(j)*ms{idx};
                     idx = idx+1;
                 end
             end
