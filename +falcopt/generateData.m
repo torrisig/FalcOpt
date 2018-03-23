@@ -337,7 +337,11 @@ function [data, code, info] = generateData(varargin)
         end
         % TODO: add documentation
         code.toDense = sprintf([options.indent.code 'void ' names.toDense '(const ' options.type '* ' names.M ', double* ' names.M 't) {' '\n']);
-        code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'unsigned int i,j;' '\n'])];
+        code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'unsigned int i'])];
+        if info.structure.stored.num < dims.n*dims.m
+            code.toDense = [code.toDense, sprintf(',j')];
+        end
+        code.toDense = [code.toDense, sprintf([';' '\n'])];
         if info.structure.stored.num < dims.n*dims.m
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic '/* Initialize to zero */' '\n'])];
             code.toDense = [code.toDense, sprintf([options.indent.code options.indent.generic 'for(i=0; i<%i; i++) { /* Iterate over columns */' '\n'], dims.m)];
