@@ -714,10 +714,6 @@ function [data, code, info] = generateMVMult(varargin)
             end
         end
         if any(options.transpose & ~options.static.M)
-            fprintf(f, [options.indent.code 'static ' options.inline ' void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
-            if ~isempty(options.inline)
-                fprintf(f, [options.inline ' ']);
-            end
             fprintf(f, ['void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'unsigned int i,j;' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'for(i=0; i<m; i++) { /* iterate over columns */' '\n']);
