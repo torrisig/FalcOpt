@@ -756,7 +756,7 @@ function [data, code, info] = generateMVMult(varargin)
             if strcmp(options.types.data, 'double')
                 fprintf(f, [options.indent.generic 'double* ' names.r ' = mxGetPr(plhs[0]);' '\n']);
             else
-                fprintf(f, [options.indent.generic options.types.data ' ' names.r '[%i];' '\n']);
+                fprintf(f, [options.indent.generic options.types.data ' ' names.r '[%i];' '\n'], dims.m);
             end
         end
         % Vectors v
