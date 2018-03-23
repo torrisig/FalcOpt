@@ -775,9 +775,6 @@ function [data, code, info] = generateMVMult(varargin)
         % Non-static matrices M
         if any(~options.static.M & (elements.M.stored.num > 0))
             fprintf(f, [options.indent.generic '/* Non-static matrices ' strjoin(names.M(~options.static.M), ', ') ' */' '\n']);
-            if any(options.transpose & ~options.static.M)
-                fprintf(f, [options.indent.generic 'double ttemp[%i]; /* Temporary array for transposing */' '\n'], dims.m*max(dims.n(options.transpose & ~options.static.M)));
-            end
             for j=1:dims.l
                 if ~options.static.M(j) && (elements.M.stored.num(j) > 0)
                     if ~options.transpose(j)
@@ -787,12 +784,7 @@ function [data, code, info] = generateMVMult(varargin)
                     end
                     fprintf(f, [options.indent.generic options.types.data ' ' names.M{j} '[%i]; '], elements.M.stored.num(j));
                     fprintf(f, ['double* ' names.M{j} '_in = mxGetPr(prhs[%i]);' '\n'], i-1);
-                    if options.transpose(j)
-                        fprintf(f, [options.indent.generic 'transpose(' names.M{j} '_in, %i, %i, ttemp);' '\n'], dims.n(j), dims.m);
-                        fprintf(f, [options.indent.generic 'transform_' names.M{j} '(ttemp, ' names.M{j} ');' '\n']);
-                    else
-                        fprintf(f, [options.indent.generic 'transform_' names.M{j} '(' names.M{j} '_in, ' names.M{j} ');' '\n']);
-                    end
+                    fprintf(f, [options.indent.generic 'transform_' names.M{j} '(' names.M{j} '_in, ' names.M{j} ');' '\n']);
                     i = i+1;
                 end
             end
