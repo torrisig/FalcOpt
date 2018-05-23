@@ -1315,6 +1315,16 @@ else
 
     info.y.static = 0;
     
+    try
+        y_workSize = y_f.sz_w;
+    catch
+        try
+            y_workSize = y_f.getWorkSize();
+        catch
+            throw(MException('falcopt:generateCode:InvalidWorkSize', 'Something unexpected happened, could not compute work size.'));
+        end
+    end
+    
     % wrapper function
     if strcmp(fName,'model_mpc') 
         code = [code, sprintf('/* Dynamics of the system */\n')];
@@ -1322,17 +1332,17 @@ else
     if( nargin(f) == 3)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n'])];
     elseif( nargin(f) == 2)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n'])];
     elseif( nargin(f) == 1)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf('\tin[0] = x;\n\n')];
     end
     
@@ -1386,6 +1396,16 @@ for k = 1:length(p.Results.jac)
         jac = casadi.Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
         info.sxfcn{length(info.sxfcn)+1} =  jac; 
         
+        try
+            jac_workSize = jac.sz_w;
+        catch
+            try
+                jac_workSize = jac.getWorkSize();
+            catch
+                throw(MException('falcopt:generateCode:InvalidWorkSize', 'Something unexpected happened, could not compute work size'));
+            end
+        end
+        
         % wrapper jacobian
         if strcmp(fName,'model_mpc')
             code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',p.Results.jac{k})]; %#ok
@@ -1393,19 +1413,19 @@ for k = 1:length(p.Results.jac)
         if( nargin(f) == 3)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 2)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 1)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
