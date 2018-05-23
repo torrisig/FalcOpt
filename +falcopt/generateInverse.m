@@ -252,7 +252,9 @@ function [code, info] = generateInverse(varargin)
     % Code (iterate over blocks)
     for i=1:elements.M.blocks.num
         code = [code, sprintf([options.indent.code options.indent.generic '/* Block #%i (%ix%i) */' '\n'], i, elements.M.blocks.size(i), elements.M.blocks.size(i))]; %#ok
-        warning('falcopt:generateInverse:InvalidData', 'Indexing of Mi is not correct, please verify.');
+        if options.verbose >= 1
+            warning('falcopt:generateInverse:InvalidData', 'Indexing of Mi is not correct, please verify.');
+        end
         switch elements.M.blocks.size(i)
             case 1
                 code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[%i] = 1.0/' names.M '[%i];' '\n'], elements.Mi.indices(elements.M.row(elements.M.blocks.indices{i}),elements.M.col(elements.M.blocks.indices{i}))-1, elements.M.blocks.indices{i}(1)-1)]; %#ok
