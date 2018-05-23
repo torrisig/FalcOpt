@@ -104,12 +104,7 @@ if isempty(o.precision)
             o.precision = 'double';
     end
 end
-switch o.type
-    case 'double'
-        real_T = 'double';
-    case 'float'
-        real_T = 'float';
-end
+
 switch o.precision
     case 'double'
         real_s = 'SS_DOUBLE';
@@ -270,7 +265,7 @@ code = [code, sprintf(' %s *%s){\n\n',out.(out_names{end}).data_c,out.(out_names
 % internal variables ( max number iteration and vector u )
 code = [code, sprintf([o.indent 'int i=0;\n' ...
                        o.indent 'unsigned int lineSearch_nit[' falcopt.internal.toDefineName(o.names.maximumIterations) '];\n' ...
-                       o.indent real_T ' u[%i];\n'], o.nu*o.N)];
+                       o.indent o.type ' u[%i];\n'], o.nu*o.N)];
 
 % Prepare inputs
 code = [code, sprintf(['\n' o.indent 'for( i=0;i<%i;i++){ u[i] = %s[i];}\n'],o.nu*o.N,in.u_pred.name)];
