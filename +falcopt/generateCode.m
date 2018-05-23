@@ -1458,7 +1458,15 @@ end
 function [src,header] = generate_casadi_c(o, fileName, fcns)
     % given functions 'fcns' generate c code using casadi in the give 'fileName'
     % returns name of .c src file and .h header file
-    C = casadi.CodeGenerator(fileName, struct('with_header',true,'real_t',o.real));
+    try
+        C = casadi.CodeGenerator(fileName, struct('with_header',true,'casadi_real',o.real));
+    catch
+        try
+            C = casadi.CodeGenerator(fileName, struct('with_header',true,'real_t',o.real)); % real_t is DEPRICATED from CasADi 3.3.0
+        catch ME
+            throw(ME);
+        end
+    end
 
     for k = 1:length(fcns)
         if( ~isempty(fcns{k}))
