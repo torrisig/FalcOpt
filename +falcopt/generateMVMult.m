@@ -43,7 +43,7 @@
 %  .scale     - A static scalar that scales the result. Default is 1.
 %                Can also be a struct struct('M', [..], 'm', [..]) to scale individually.
 %  .indent    - Indentation to be used in code generation
-%  .inline    - Inline keyword to be uised. Default is inline
+%  .inline    - Inline keyword to be used. Default is inline
 %  .verbose   - Level of procedural output of this function
 %  .test      - Level of tests performed
 %  .epsFactor - Factor of machine-precision that is considered. Default is 100
