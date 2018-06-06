@@ -79,7 +79,7 @@
 %   gendir     - Target directory for generated files. Needs to be a valid (existing) directory. Default: './'.
 %   precision  - The precision of the computation and data used. Can be either 'double' or 'single'. Defaukt: 'double'.
 %   buildTypes - A cell array of build types to be generated, can include
-%                 'mex', 'simulink', 'production'. Default: 'mex'.
+%                 'mex', 'simulink', 'standalone', 'production'. Default: 'mex'.
 %   compile    - Whether the generated code is compiled. Default: true.
 %   gradients  - How to do code generation for function evaluation and gradient/Jacobian computation.
 %                 Can be 'matlab' using MATLAB code generation,
@@ -204,7 +204,7 @@ function [info] = generateCode(varargin)
     p.addParameter('name', 'my_code', @ischar);
     p.addParameter('gendir', './', @ischar);
     p.addParameter('precision', 'double', @(x)( strcmp(x,'double')|| strcmp(x,'single') ));
-    p.addParameter('buildTypes', {'mex'}, @(x)(iscell(x) && all(cellfun(@(c)(any(strcmp(c, {'mex', 'simulink', 'production'}))), x))));
+    p.addParameter('buildTypes', {'mex'}, @(x)(iscell(x) && all(cellfun(@(c)(any(strcmp(c, {'mex', 'simulink', 'production', 'standalone'}))), x))));
     p.addParameter('compile', true, @islogical);
     p.addParameter('gradients', 'matlab', @(x)(ischar(x) && any(strcmp(x, gradientTypes))));
     p.addParameter('external', struct(), @isstruct);
@@ -1190,22 +1190,33 @@ if any(strcmp('mex', o.buildTypes))
         eval(compile);
     end
 end
-% Generate production code
+% Generate standalone code
+if any(strcmp('standalone', o.buildTypes))
+    standalone_code = [copyright  '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode];
+    filename = [o.gendir '/' o.name '_standalone'];
+    f = fopen([filename '.c'], 'w+');
+    fprintf(f, standalone_code);
+    fclose(f);
+end
+% Generate standalone code (.h and .c)
 if any(strcmp('production', o.buildTypes))
-    production_code = [copyright  '\n' libr '\n' defs '\n' data '\n'  code '\n' optCode];
+    production_header = [copyright  '\n' ...
+                         '#ifndef _' upper(o.name) '_H_' '\n' ...
+                         '#define _' upper(o.name) '_H_' '\n' '\n' ...
+                         defs ...
+                         '\n' '#endif /* _' upper(o.name) '_H_ */' '\n' ];
+    production_code = [copyright  '\n' ...
+                       libr '\n' ...
+                       '#include "' o.name '.h"' '\n' ...
+                       data '\n' ...
+                       code '\n' ...
+                       optCode];
     filename = [o.gendir '/' o.name];
-    ext_file = [];
-    for k = 1:length(info.src)
-        ext_file = [ext_file, ' ', info.src{k}]; %#ok
-    end
-    if strcmp(o.gradients,'ccode')
-        if any(cellfun('length',regexp(info.src,'external_functions.c')))&&~any(cellfun('length',regexp(info.header,'external_functions.h')))
-            % avoid to compile twice external_functions.c
-            ext_file = [];
-        end
-    end
     f = fopen([filename '.c'], 'w+');
     fprintf(f, production_code);
+    fclose(f);
+    f = fopen([filename '.h'], 'w+');
+    fprintf(f, production_header);
     fclose(f);
 end
 % generate simulink
