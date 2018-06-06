@@ -77,7 +77,7 @@
 %   name       - Name of the generated solver. Will also be the name of the .c, .mex and simulink file (if generated).
 %                 Default: 'my_code'.
 %   gendir     - Target directory for generated files. Needs to be a valid (existing) directory. Default: './'.
-%   precision  - The precision of the computation and data used. Can be either 'double' or 'single'. Defaukt: 'double'.
+%   precision  - The precision of the computation and data used. Can be either 'double' or 'single'. Default: 'double'.
 %   buildTypes - A cell array of build types to be generated, can include
 %                 'mex', 'simulink', 'standalone', 'production'. Default: 'mex'.
 %   compile    - Whether the generated code is compiled. Default: true.
