@@ -1311,9 +1311,30 @@ else
     y_f = casadi.Function([fName '_casadi'],{x,u,w},{in_y.stored.values});
     info.sxfcn{1} = y_f;
    
-    info.y.flops =  y_f.getAlgorithmSize(); %flops
+    % Get number of FLOPS
+    try
+        info.y.flops = y_f.getAlgorithmSize();
+    catch
+        try
+            info.y.flops = y_f.n_instructions();
+        catch
+            warning('Cannot use casadi.Function.getAlgorithmSize() or casadi.Function.n_instructions(), number of FLOPS may too low as a result.');
+            info.y.flops = 0;
+        end
+    end
+    
 
     info.y.static = 0;
+    
+    try
+        y_workSize = y_f.sz_w;
+    catch
+        try
+            y_workSize = y_f.getWorkSize();
+        catch
+            throw(MException('falcopt:generateCode:InvalidWorkSize', 'Something unexpected happened, could not compute work size.'));
+        end
+    end
     
     % wrapper function
     if strcmp(fName,'model_mpc') 
@@ -1322,17 +1343,17 @@ else
     if( nargin(f) == 3)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n'])];
     elseif( nargin(f) == 2)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* u, ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n'])];
     elseif( nargin(f) == 1)
         code = [code, sprintf(['void ' fName '( const ' o.real '* x, const ' o.real '* xp){' '\n\n'])];
         code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)];
-        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_f.getWorkSize(),0,0)]; %TODO Tommaso check parameter
+        code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],y_workSize,0,0)]; %TODO Tommaso check parameter
         code = [code, sprintf('\tin[0] = x;\n\n')];
     end
     
@@ -1386,6 +1407,16 @@ for k = 1:length(p.Results.jac)
         jac = casadi.Function(sprintf([J_name '_casadi']),{x,u,w},{in.stored.values});
         info.sxfcn{length(info.sxfcn)+1} =  jac; 
         
+        try
+            jac_workSize = jac.sz_w;
+        catch
+            try
+                jac_workSize = jac.getWorkSize();
+            catch
+                throw(MException('falcopt:generateCode:InvalidWorkSize', 'Something unexpected happened, could not compute work size'));
+            end
+        end
+        
         % wrapper jacobian
         if strcmp(fName,'model_mpc')
             code = [code, sprintf('/* System dynmics jacobian w.r.t %c variable */\n',p.Results.jac{k})]; %#ok
@@ -1393,19 +1424,19 @@ for k = 1:length(p.Results.jac)
         if( nargin(f) == 3)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, const ' o.real '* v, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],3)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\t' 'in[2] = v;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 2)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* u, ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],2)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\t' 'in[1] = u;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         elseif( nargin(f) == 1)
             code = [code, sprintf(['void ' J_name '( const ' o.real '* x, const ' o.real '* res){' '\n\n'])]; %#ok
             code = [code, sprintf([o.indent.generic  'const ' o.real ' *in[%i];\n'],1)]; %#ok
-            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac.getWorkSize(),0,0)]; %#ok
+            code = [code, sprintf([o.indent.generic  o.real ' w[%i];\n\tint iw = %i;\n\t' 'int mem = %i; \n\n'],jac_workSize,0,0)]; %#ok
             code = [code, sprintf(['\tin[0] = x;\n\n' ...
                 o.indent.generic  J_name '_casadi( in, &res, &iw, w, mem);' o.indent.generic '/* external generated casadi function*/\n}\n\n']) ]; %#ok
         end
@@ -1413,11 +1444,17 @@ for k = 1:length(p.Results.jac)
         data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
         data = [data, sprintf([o.indent.data  'static ' o.real ' ' static_name '[%i];' '\n'], in.stored.num)]; %#ok
         info.(struct_name).struct.structure = in;
+        
+        % Get number of FLOPS
         try
-            info.(struct_name).flops =   jac.getAlgorithmSize(); %flops
+            info.(struct_name).flops = jac.getAlgorithmSize();
         catch
-            warning('Cannot use casadi.Function.getAlgoirthmSize()');
-            info.(struct_name).flops = 0;
+            try
+                info.(struct_name).flops = jac.n_instructions();
+            catch
+                warning('Cannot use casadi.Function.getAlgorithmSize() or casadi.Function.n_instructions(), number of FLOPS may too low as a result.');
+                info.(struct_name).flops = 0;
+            end
         end
     end
 end
@@ -1432,7 +1469,15 @@ end
 function [src,header] = generate_casadi_c(o, fileName, fcns)
     % given functions 'fcns' generate c code using casadi in the give 'fileName'
     % returns name of .c src file and .h header file
-    C = casadi.CodeGenerator(fileName, struct('with_header',true,'real_t',o.real));
+    try
+        C = casadi.CodeGenerator(fileName, struct('with_header',true,'casadi_real',o.real));
+    catch
+        try
+            C = casadi.CodeGenerator(fileName, struct('with_header',true,'real_t',o.real)); % real_t is DEPRICATED from CasADi 3.3.0
+        catch ME
+            throw(ME);
+        end
+    end
 
     for k = 1:length(fcns)
         if( ~isempty(fcns{k}))
@@ -1785,11 +1830,19 @@ if( nl_con)
                     y_f{jj} = casadi.Function(['build_n_' num2str(jj) '_casadi'],{z},{in_n{jj}.stored.values});
                     
                     sxfcn{end + 1} = y_f{jj}; %#ok
+                    
+                    % Get number of FLOPS
                     try
-                        info.in_n{jj}.flops =  y_f{jj}.getAlgorithmSize(); %flops
+                        info.in_n{jj}.flops =  y_f{jj}.getAlgorithmSize();
                     catch
-                        warning('Cannot use casadi.Function.getAlgoirthmSize()');
+                        try
+                            info.in_n{jj}.flops =  y_f{jj}.n_instructions();
+                        catch
+                            warning('Cannot use casadi.Function.getAlgorithmSize() or casadi.Function.n_instructions(), number of FLOPS may too low as a result.');
+                            info.in_n{jj}.flops = 0;
+                        end
                     end
+                    
                     info.in_n{jj}.static = 0;
                     info.in_n{jj}.struct.structure = in_n{jj};
                     
@@ -1828,10 +1881,17 @@ if( nl_con)
                         code = [code, sprintf(['\tin[0] = u;\n\n' ...
                             o.indent.generic  'build_Dn_%d_casadi( in, &Dn_fun, &iw, w, mem);' o.indent.generic '/* external casadi generated function*/\n}\n\n'],jj) ]; %#ok
                         info.in_Dn_n{jj}.struct.structure = i;
+                        
+                        % Get number of FLOPS
                         try
-                            info.in_Dn_n{jj}.flops =   Dn_f{jj}.getAlgorithmSize(); %flops
+                            info.in_Dn_n{jj}.flops = Dn_f{jj}.getAlgorithmSize();
                         catch
-                            warning('Cannot use casadi.Function.getAlgoirthmSize()');
+                            try
+                                info.in_Dn_n{jj}.flops = Dn_f{jj}.n_instructions();
+                            catch
+                                warning('Cannot use casadi.Function.getAlgorithmSize() or casadi.Function.n_instructions(), number of FLOPS may too low as a result.');
+                                info.in_Dn_n{jj}.flops = 0;
+                            end
                         end
                     end
                 end

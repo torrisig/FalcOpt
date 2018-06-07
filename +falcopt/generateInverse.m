@@ -176,9 +176,6 @@ function [code, info] = generateInverse(varargin)
     structureInfo = falcopt.detectMatrixStructure(M, 'structure', options.structure.M, 'symmetric', options.symmetric, 'verbose', options.verbose+1);
     info.structure = structureInfo.structure;
     elements = structureInfo.elements;
-    if any(elements.M.blocks.size > 2)
-        throw(MException('falcopt:generateInverse:MissingImplementation', ['Largest block is of size ' num2str(max(elements.M.blocks.size)) 'x' num2str(max(elements.M.blocks.size)) '. generateInverse() has been only implemented for matrices containing blocks of size at most 2x2.']));
-    end
     % Indices of solution matrix Mi
     Mi = zeros(dims.n);
     for i=1:elements.M.blocks.num
@@ -245,20 +242,27 @@ function [code, info] = generateInverse(varargin)
     code = [code, sprintf([options.indent.code options.types.fun ' ' names.fun '(' options.types.data '* ' names.Mi ', const ' options.types.data '* ' names.M ') {' '\n'])];
     if any(elements.M.blocks.size > 1)
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' det_i; /* Temporary variable to store inverse of determinant */' '\n'])];
+    end
+    if any(elements.M.blocks.size == 2)
         code = [code, sprintf([options.indent.code options.indent.generic options.types.data ' temp; /* Temporary variable */' '\n'])];
+    end
+    if any(elements.M.blocks.size == 4)
+        code = [code, sprintf([options.indent.code options.indent.generic 'unsigned int i;' '\n'])];
     end
     % Code (iterate over blocks)
     for i=1:elements.M.blocks.num
         code = [code, sprintf([options.indent.code options.indent.generic '/* Block #%i (%ix%i) */' '\n'], i, elements.M.blocks.size(i), elements.M.blocks.size(i))]; %#ok
+        if options.verbose >= 1
+            warning('falcopt:generateInverse:InvalidData', 'Indexing of Mi is not correct, please verify.');
+        end
         switch elements.M.blocks.size(i)
-            % TODO indexing of Mi is not correct!
             case 1
                 code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[%i] = 1.0/' names.M '[%i];' '\n'], elements.Mi.indices(elements.M.row(elements.M.blocks.indices{i}),elements.M.col(elements.M.blocks.indices{i}))-1, elements.M.blocks.indices{i}(1)-1)]; %#ok
                 info.flops.inv = info.flops.inv+1;
             case 2
                 [~,~,Jr] = unique(elements.M.row(elements.M.blocks.indices{i}), 'stable');
                 [~,~,Jc] = unique(elements.M.col(elements.M.blocks.indices{i}), 'stable');
-                I = (Jr-1)*2+Jc;
+                I = (Jr-1)*elements.M.blocks.size(i)+Jc;
                 % Compute determinant
                 if length(I) == 4
                     code = [code, sprintf([options.indent.code options.indent.generic 'det_i  = 1.0/(' names.M '[%i]*' names.M '[%i] - ' names.M '[%i]*' names.M '[%i]); /* Compute determinant */' '\n'], elements.M.blocks.indices{i}(I==1)-1, elements.M.blocks.indices{i}(I==4)-1, elements.M.blocks.indices{i}(I==2)-1, elements.M.blocks.indices{i}(I==3)-1)]; %#ok
@@ -312,6 +316,167 @@ function [code, info] = generateInverse(varargin)
                 else
                     %code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[%i] = 0.0;' '\n'], elements.M.indices(rows(2), cols(2))-1)];
                 end
+            case 4
+                [~,~,Jr] = unique(elements.M.row(elements.M.blocks.indices{i}), 'stable');
+                [~,~,Jc] = unique(elements.M.col(elements.M.blocks.indices{i}), 'stable');
+                I = (Jr-1)*elements.M.blocks.size(i)+Jc;
+                % Compute entries of inverse
+                cols = unique(elements.M.col(elements.M.blocks.indices{i}), 'stable');
+                rows = unique(elements.M.row(elements.M.blocks.indices{i}), 'stable');
+                % TODO deal with non-dense inverse and non-dense M!
+                mult2str = @(idx)([names.M '[' num2str(elements.M.blocks.indices{i}(I==idx)-1) ']']);
+                % (1,1)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = ' strjoin(arrayfun(mult2str, [6,11,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [6,12,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [10,7,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [10,8,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [14,7,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [14,8,11], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (1,2)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(2))-1) '] = -' strjoin(arrayfun(mult2str, [2,11,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [2,12,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [10,3,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [10,4,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [14,3,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [14,4,11], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (1,3)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(3))-1) '] = ' strjoin(arrayfun(mult2str, [2,7,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [2,8,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [6,3,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [6,4,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [14,3,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [14,4,7], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (1,4)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(4))-1) '] = -' strjoin(arrayfun(mult2str, [2,7,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [2,8,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [6,3,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [6,4,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [10,3,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [10,4,7], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (2,1)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(2), cols(1))-1) '] = -' strjoin(arrayfun(mult2str, [5,11,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,12,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,7,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,8,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,7,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,8,11], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (2,2)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(2), cols(2))-1) '] = ' strjoin(arrayfun(mult2str, [1,11,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [1,12,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,3,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,4,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,3,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,4,11], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (2,3)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(2), cols(3))-1) '] = -' strjoin(arrayfun(mult2str, [1,7,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [1,8,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,3,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,4,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,3,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,4,7], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (2,4)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(2), cols(4))-1) '] = ' strjoin(arrayfun(mult2str, [1,7,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [1,8,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,3,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,4,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,3,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,4,7], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (3,1)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(3), cols(1))-1) '] = ' strjoin(arrayfun(mult2str, [5,10,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,12,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,6,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,8,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,6,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,8,10], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (3,2)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(3), cols(2))-1) '] = -' strjoin(arrayfun(mult2str, [1,10,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [1,12,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,2,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,4,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,2,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,4,10], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (3,3)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(3), cols(3))-1) '] = ' strjoin(arrayfun(mult2str, [1,6,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [1,8,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,2,16], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,4,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,2,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,4,6], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (3,4)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(3), cols(4))-1) '] = -' strjoin(arrayfun(mult2str, [1,6,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [1,8,10], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,2,12], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,4,10], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,2,8], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,4,6], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (4,1)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(4), cols(1))-1) '] = -' strjoin(arrayfun(mult2str, [5,10,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,11,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,6,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,7,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,6,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,7,10], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (4,2)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(4), cols(2))-1) '] = ' strjoin(arrayfun(mult2str, [1,10,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [1,11,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,2,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,3,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,2,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,3,10], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (4,3)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(4), cols(3))-1) '] = -' strjoin(arrayfun(mult2str, [1,6,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [1,7,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,2,15], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,3,14], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [13,2,7], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [13,3,6], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % (4,2)
+                code = [code, sprintf([options.indent.code options.indent.generic names.Mi '[' num2str(elements.Mi.indices(rows(4), cols(4))-1) '] = ' strjoin(arrayfun(mult2str, [1,6,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [1,7,10], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [5,2,11], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [5,3,10], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '+' strjoin(arrayfun(mult2str, [9,2,7], 'UniformOutput', false),'*') '\n'])];
+                code = [code, sprintf([options.indent.code options.indent.generic repmat(' ',1,length([names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] = '])) '-' strjoin(arrayfun(mult2str, [9,3,6], 'UniformOutput', false),'*') ';' '\n'])];
+                info.flops.mul = info.flops.mul+12;
+                info.flops.add = info.flops.add+5;
+                % Compute inverse determinant
+                code = [code, sprintf([options.indent.code options.indent.generic 'det_i = 1.0/(' names.M '[' num2str(elements.M.blocks.indices{i}(I==1)-1) ']*' names.Mi '[' num2str(elements.Mi.indices(rows(1), cols(1))-1) '] + ' names.M '[' num2str(elements.M.blocks.indices{i}(I==2)-1) ']*' names.Mi '[' num2str(elements.Mi.indices(rows(2), cols(1))-1) '] + ' names.M '[' num2str(elements.M.blocks.indices{i}(I==3)-1) ']*' names.Mi '[' num2str(elements.Mi.indices(rows(3), cols(1))-1) '] + ' names.M '[' num2str(elements.M.blocks.indices{i}(I==4)-1) ']*' names.Mi '[' num2str(elements.Mi.indices(rows(4), cols(1))-1) ']);' '\n'])];
+                info.flops.mul = info.flops.mul+4;
+                info.flops.add = info.flops.add+3;
+                info.flops.inv = info.flops.inv+1;
+                code = [code, sprintf([options.indent.code options.indent.generic 'for(i=0; i<16; i++) { ' names.Mi '[i] = ' names.Mi '[i]*det_i; }' '\n'])];
+            otherwise
+                throw(MException('falcopt:generateInverse:MissingImplementation', ['There is a block of size ' num2str(max(elements.M.blocks.size)) 'x' num2str(max(elements.M.blocks.size)) '. generateInverse() has only been implemented for blocks of size 1x1, 2x2 and 4x4.']));
         end
     end
     code = [code, sprintf([options.indent.code '}'])];
@@ -443,7 +608,7 @@ function [code, info] = generateInverse(varargin)
             eval(['Mis = ' names.fun '_mex(Ms);']);
             % Compute correct value
             Mi = inv(Ms);
-            if isnan(norm(Mi-Mis,inf)) || norm(Mi-Mis,inf) > options.epsFactor*eps(options.types.data)
+            if isnan(norm(Mi-Mis,inf)) || norm(Mi-Mis,inf) > options.epsFactor*eps(options.precision)
                 errors = errors + 1;
                 maxError = max(maxError, norm(Mi-Mis,inf));
             end

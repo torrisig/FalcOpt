@@ -43,7 +43,7 @@
 %  .scale     - A static scalar that scales the result. Default is 1.
 %                Can also be a struct struct('M', [..], 'm', [..]) to scale individually.
 %  .indent    - Indentation to be used in code generation
-%  .inline    - Inline keyword to be uised. Default is inline
+%  .inline    - Inline keyword to be used. Default is inline
 %  .verbose   - Level of procedural output of this function
 %  .test      - Level of tests performed
 %  .epsFactor - Factor of machine-precision that is considered. Default is 100
@@ -686,15 +686,15 @@ function [data, code, info] = generateMVMult(varargin)
                          ' ***************/' '\n']);
         fprintf(f, data);
         % Code generated function
-        fprintf(f, ['\n' '/***************************' '\n' ...
-                         ' * Code-generated Function *' '\n' ...
-                         ' ***************************/' '\n']);
+        fprintf(f, ['\n' '\n' '/***************************' '\n' ...
+                              ' * Code-generated Function *' '\n' ...
+                              ' ***************************/' '\n']);
         fprintf(f, [code '\n']);
         % Auxiliary functions
         fprintf(f, ['\n' '/***********************' '\n' ...
                          ' * Auxiliary Functions *' '\n' ...
                          ' ***********************/' '\n']);
-        [~, c] = falcopt.generateData(ones(dims.m,1), 'structure', 'dense', ...
+        [~, c] = falcopt.generateData(ones(dims.m,1), 'structure', 'dense', 'type', options.types.data, 'precision', options.precision, ....
                                                     'names', struct('M', 'r', 'toDense', 'transform_R_toOutput', 'fromDense', 'copy_R'), ...
                                                     'indent', struct('generic', options.indent.generic, 'code', ''), ...
                                                     'verbose', 0);
@@ -706,7 +706,7 @@ function [data, code, info] = generateMVMult(varargin)
         end
         if ~strcmp(options.types.data, 'double') % Transform v's into appropriate data type
             for i=1:dims.l
-                [~, c] = falcopt.generateData(ones(dims.n(i),1), 'structure', 'dense', ...
+                [~, c] = falcopt.generateData(ones(dims.n(i),1), 'structure', 'dense', 'type', options.types.data, 'precision', options.precision, ...
                                                                'names', struct('M', 'v', 'fromDense', ['transform_' names.v{i}]), ...
                                                                'indent', struct('generic', options.indent.generic, 'code', ''), ...
                                                                'verbose', 0);
@@ -714,10 +714,6 @@ function [data, code, info] = generateMVMult(varargin)
             end
         end
         if any(options.transpose & ~options.static.M)
-            fprintf(f, [options.indent.code 'static ' options.inline ' void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
-            if ~isempty(options.inline)
-                fprintf(f, [options.inline ' ']);
-            end
             fprintf(f, ['void transpose(const double* M, unsigned int n, unsigned int m, double* Mt) {' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'unsigned int i,j;' '\n']);
             fprintf(f, [options.indent.code options.indent.generic 'for(i=0; i<m; i++) { /* iterate over columns */' '\n']);
@@ -760,7 +756,7 @@ function [data, code, info] = generateMVMult(varargin)
             if strcmp(options.types.data, 'double')
                 fprintf(f, [options.indent.generic 'double* ' names.r ' = mxGetPr(plhs[0]);' '\n']);
             else
-                fprintf(f, [options.indent.generic options.types.data ' ' names.r '[%i];' '\n']);
+                fprintf(f, [options.indent.generic options.types.data ' ' names.r '[%i];' '\n'], dims.m);
             end
         end
         % Vectors v
@@ -779,9 +775,6 @@ function [data, code, info] = generateMVMult(varargin)
         % Non-static matrices M
         if any(~options.static.M & (elements.M.stored.num > 0))
             fprintf(f, [options.indent.generic '/* Non-static matrices ' strjoin(names.M(~options.static.M), ', ') ' */' '\n']);
-            if any(options.transpose & ~options.static.M)
-                fprintf(f, [options.indent.generic 'double ttemp[%i]; /* Temporary array for transposing */' '\n'], dims.m*max(dims.n(options.transpose & ~options.static.M)));
-            end
             for j=1:dims.l
                 if ~options.static.M(j) && (elements.M.stored.num(j) > 0)
                     if ~options.transpose(j)
@@ -791,12 +784,7 @@ function [data, code, info] = generateMVMult(varargin)
                     end
                     fprintf(f, [options.indent.generic options.types.data ' ' names.M{j} '[%i]; '], elements.M.stored.num(j));
                     fprintf(f, ['double* ' names.M{j} '_in = mxGetPr(prhs[%i]);' '\n'], i-1);
-                    if options.transpose(j)
-                        fprintf(f, [options.indent.generic 'transpose(' names.M{j} '_in, %i, %i, ttemp);' '\n'], dims.n(j), dims.m);
-                        fprintf(f, [options.indent.generic 'transform_' names.M{j} '(ttemp, ' names.M{j} ');' '\n']);
-                    else
-                        fprintf(f, [options.indent.generic 'transform_' names.M{j} '(' names.M{j} '_in, ' names.M{j} ');' '\n']);
-                    end
+                    fprintf(f, [options.indent.generic 'transform_' names.M{j} '(' names.M{j} '_in, ' names.M{j} ');' '\n']);
                     i = i+1;
                 end
             end
@@ -891,11 +879,7 @@ function [data, code, info] = generateMVMult(varargin)
             Ms = {};
             for j=1:dims.l
                 if ~options.static.M(j)
-                    if ~options.transpose(j)
-                        Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)}]; %#ok
-                    else
-                        Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)'}]; %#ok
-                    end
+                    Ms = [Ms, {elements.M.utils.rand{j}(stream, -2,2)}]; %#ok
                 end
             end
             ms = {};
@@ -905,7 +889,15 @@ function [data, code, info] = generateMVMult(varargin)
                 end
             end
             % Compute r using code-generated function
-            eval(['rs = ' names.fun '_mex(vs{:}, Ms{:}, ms{:});']);
+            funstr = ['rs = ' names.fun '_mex(vs{:}'];
+            if ~all(options.static.M)
+                funstr = [funstr ', Ms{:}'];
+            end
+            if ~all(options.static.m)
+                funstr = [funstr ', ms{:}'];
+            end
+            funstr = [funstr ');'];
+            eval(funstr);
             % Compute correct value
             r = zeros(dims.m,1);
             idx = 1;
@@ -914,9 +906,9 @@ function [data, code, info] = generateMVMult(varargin)
                     r = r + M{j}*vs{j};
                 else
                     if ~options.transpose(j)
-                        r = r + Ms{idx}*vs{j};
+                        r = r + options.scale.M(j)*Ms{idx}*vs{j};
                     else
-                        r = r + Ms{idx}'*vs{j};
+                        r = r + options.scale.M(j)*Ms{idx}'*vs{j};
                     end
                     idx = idx+1;
                 end
@@ -924,13 +916,13 @@ function [data, code, info] = generateMVMult(varargin)
             idx = 1;
             for j=1:dims.k
                 if options.static.m(j)
-                    r = r + m{j};
+                    r = r + options.scale.m(j)*m{j};
                 else
-                    r = r + ms{idx};
+                    r = r + options.scale.m(j)*ms{idx};
                     idx = idx+1;
                 end
             end
-            if isnan(norm(r-rs,inf)) || norm(r-rs,inf) > options.epsFactor*eps(options.types.data)
+            if isnan(norm(r-rs,inf)) || norm(r-rs,inf) > options.epsFactor*eps(options.precision)
                 errors = errors + 1;
             end
             if options.verbose >= 1
