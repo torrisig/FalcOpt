@@ -1385,15 +1385,15 @@ for k = 1:length(p.Results.jac)
     if( info.(struct_name).static) %is jac matrix constant ?
         name.M = static_name;
         data = [data, sprintf([o.indent.data '/* Static data for %s */\n'],J_name)]; %#ok
-        if ~isempty(find((full(DM(jac)) ~= 0), 1))
-            [d, ~, in_d] = falcopt.generateData(full(DM(jac)), 'names', name, ...
+        if ~isempty(find((full(casadi.DM(jac)) ~= 0), 1))
+            [d, ~, in_d] = falcopt.generateData(full(casadi.DM(jac)), 'names', name, ...
                 'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
                 'static', true, 'const', true, 'verbose', o.verbose);
             info.(struct_name).struct = in_d;
             info.(struct_name).flops = 0;
         else
-            d = sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i]={ '],length(full(DM(jac))));
-            for j = 1:length(full(DM(jac)))-1
+            d = sprintf([o.indent.data 'static ' o.real ' ' static_name '[%i]={ '],length(full(casadi.DM(jac))));
+            for j = 1:length(full(casadi.DM(jac)))-1
                 d = [d, '0.0, ']; %#ok
             end
             d = [d, sprintf(['0.0 };\n'])]; %#ok
@@ -1861,7 +1861,7 @@ if( nl_con)
                     
                     if( info.in_Dn_n{jj}.static) %is jac matrix constant ?
                         name.M = sprintf('build_Dn_%d_casadi',jj);
-                        [d, ~, in] = falcopt.generateData(full(DM(Dn{jj})), 'names', name, ...
+                        [d, ~, in] = falcopt.generateData(full(casadi.DM(Dn{jj})), 'names', name, ...
                             'type', o.real, 'precision', o.precision, 'structure', 'unique', 'noones', false, 'indent', o.indent, ...
                             'static', true, 'const', true, 'verbose', o.verbose);
                         info.in_Dn_n{jj}.struct = in;
